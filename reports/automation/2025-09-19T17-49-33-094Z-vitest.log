@@ -1,0 +1,15 @@
+
+> @nebula/web@0.1.0 test C:\Users\issab\Desktop\TETETTE\apps\web
+> vitest run
+
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mC:/Users/issab/Desktop/TETETTE/apps/web[39m
+
+ [32m✓[39m src/components/DropCard.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 358[2mms[22m[39m
+   [33m[2m✓[22m[39m DropCard[2m > [22mrenders drop information [33m356[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m   Start at [22m 19:49:34
+[2m   Duration [22m 4.90s[2m (transform 115ms, setup 303ms, collect 566ms, tests 358ms, environment 2.06s, prepare 240ms)[22m
+

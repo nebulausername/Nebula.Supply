@@ -1,0 +1,240 @@
+/* Responsive Layout System */
+
+/* Safe Area Insets für iOS Notch */
+@supports (padding: env(safe-area-inset-top)) {
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  .safe-left {
+    padding-left: env(safe-area-inset-left);
+  }
+  
+  .safe-right {
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Container Queries Support */
+@container (min-width: 320px) {
+  .container-xs {
+    font-size: clamp(0.875rem, 0.8rem + 0.375vw, 1rem);
+  }
+}
+
+@container (min-width: 480px) {
+  .container-sm {
+    font-size: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+  }
+}
+
+@container (min-width: 768px) {
+  .container-md {
+    font-size: clamp(1.125rem, 1rem + 0.625vw, 1.5rem);
+  }
+}
+
+@container (min-width: 1024px) {
+  .container-lg {
+    font-size: clamp(1.25rem, 1.1rem + 0.75vw, 1.875rem);
+  }
+}
+
+/* Fluid Typography Utilities */
+.fluid-text-xs {
+  font-size: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+  line-height: 1.5;
+}
+
+.fluid-text-sm {
+  font-size: clamp(0.875rem, 0.8rem + 0.375vw, 1rem);
+  line-height: 1.5;
+}
+
+.fluid-text-base {
+  font-size: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+  line-height: 1.5;
+}
+
+.fluid-text-lg {
+  font-size: clamp(1.125rem, 1rem + 0.625vw, 1.5rem);
+  line-height: 1.5;
+}
+
+.fluid-text-xl {
+  font-size: clamp(1.25rem, 1.1rem + 0.75vw, 1.875rem);
+  line-height: 1.4;
+}
+
+.fluid-text-2xl {
+  font-size: clamp(1.5rem, 1.3rem + 1vw, 2.25rem);
+  line-height: 1.3;
+}
+
+.fluid-text-3xl {
+  font-size: clamp(1.875rem, 1.5rem + 1.875vw, 3rem);
+  line-height: 1.2;
+}
+
+.fluid-text-4xl {
+  font-size: clamp(2.25rem, 1.75rem + 2.5vw, 4rem);
+  line-height: 1.1;
+}
+
+/* Responsive Spacing Utilities */
+.responsive-padding {
+  padding: clamp(1rem, 2vw, 2rem);
+}
+
+.responsive-padding-x {
+  padding-left: clamp(1rem, 2vw, 2rem);
+  padding-right: clamp(1rem, 2vw, 2rem);
+}
+
+.responsive-padding-y {
+  padding-top: clamp(1rem, 2vw, 2rem);
+  padding-bottom: clamp(1rem, 2vw, 2rem);
+}
+
+.responsive-gap {
+  gap: clamp(0.5rem, 1.5vw, 1.5rem);
+}
+
+/* Touch Optimization */
+.touch-target {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.touch-target-lg {
+  min-width: 56px;
+  min-height: 56px;
+}
+
+/* Mobile-specific optimizations */
+@media (max-width: 767px) {
+  /* Reduce animations on mobile for better performance */
+  @media (prefers-reduced-motion: no-preference) {
+    .mobile-optimize-animations * {
+      animation-duration: 0.2s !important;
+      transition-duration: 0.2s !important;
+    }
+  }
+  
+  /* Optimize scrolling */
+  .mobile-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  
+  /* Prevent text selection on interactive elements */
+  .mobile-no-select {
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+}
+
+/* Tablet optimizations */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .tablet-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: clamp(1rem, 2vw, 1.5rem);
+  }
+}
+
+/* Desktop optimizations */
+@media (min-width: 1024px) {
+  .desktop-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: clamp(1rem, 2vw, 2rem);
+  }
+  
+  .desktop-grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: clamp(1rem, 2vw, 2rem);
+  }
+}
+
+/* Responsive Container */
+.responsive-container {
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: clamp(1rem, 4vw, 2rem);
+  padding-right: clamp(1rem, 4vw, 2rem);
+}
+
+@media (min-width: 640px) {
+  .responsive-container {
+    max-width: 640px;
+  }
+}
+
+@media (min-width: 768px) {
+  .responsive-container {
+    max-width: 768px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .responsive-container {
+    max-width: 1024px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .responsive-container {
+    max-width: 1280px;
+  }
+}
+
+@media (min-width: 1536px) {
+  .responsive-container {
+    max-width: 1536px;
+  }
+}
+
+/* Hide on specific breakpoints */
+.hide-mobile {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .hide-mobile {
+    display: block;
+  }
+  
+  .hide-tablet {
+    display: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .hide-tablet {
+    display: block;
+  }
+  
+  .show-mobile-only {
+    display: none;
+  }
+}
+
+.show-mobile-only {
+  display: block;
+}
+
+@media (min-width: 1024px) {
+  .show-mobile-only {
+    display: none;
+  }
+}
+
+

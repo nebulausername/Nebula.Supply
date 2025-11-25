@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline - Nebula Cookie Clicker</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: linear-gradient(180deg, #0A0A0A 0%, #050505 100%);
+      color: #F8FAFC;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .container {
+      text-align: center;
+      max-width: 500px;
+      animation: fadeIn 0.5s ease-out;
+    }
+
+    .cookie-icon {
+      width: 120px;
+      height: 120px;
+      margin: 0 auto 2rem;
+      background: linear-gradient(135deg, #f97316, #ea580c);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 64px;
+      box-shadow: 0 20px 40px rgba(249, 115, 22, 0.3);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      background: linear-gradient(135deg, #0BF7BC, #61F4F4);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    p {
+      font-size: 1.125rem;
+      color: #94A3B8;
+      margin-bottom: 2rem;
+      line-height: 1.6;
+    }
+
+    .button {
+      display: inline-block;
+      padding: 1rem 2rem;
+      background: linear-gradient(135deg, #0BF7BC, #61F4F4);
+      color: #0A0A0A;
+      font-weight: 600;
+      border-radius: 12px;
+      text-decoration: none;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 8px 24px rgba(11, 247, 188, 0.3);
+    }
+
+    .button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(11, 247, 188, 0.4);
+    }
+
+    .button:active {
+      transform: translateY(0);
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.05);
+      }
+    }
+
+    .offline-badge {
+      display: inline-block;
+      padding: 0.5rem 1rem;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 8px;
+      color: #F87171;
+      font-size: 0.875rem;
+      font-weight: 500;
+      margin-bottom: 2rem;
+    }
+
+    .features {
+      margin-top: 3rem;
+      padding-top: 2rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .features h2 {
+      font-size: 1.25rem;
+      margin-bottom: 1rem;
+      color: #F8FAFC;
+    }
+
+    .features ul {
+      list-style: none;
+      text-align: left;
+    }
+
+    .features li {
+      padding: 0.75rem 0;
+      color: #94A3B8;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .features li:before {
+      content: '✓';
+      color: #0BF7BC;
+      font-weight: bold;
+      font-size: 1.25rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="cookie-icon">🍪</div>
+    
+    <div class="offline-badge">⚠️ Offline Modus</div>
+    
+    <h1>Du bist offline</h1>
+    
+    <p>
+      Keine Internetverbindung gefunden. 
+      Bitte überprüfe deine Verbindung und versuche es erneut.
+    </p>
+    
+    <a href="/" class="button" onclick="window.location.reload(); return false;">
+      🔄 Erneut versuchen
+    </a>
+
+    <div class="features">
+      <h2>Deine Fortschritte sind gesichert</h2>
+      <ul>
+        <li>Alle Cookies werden lokal gespeichert</li>
+        <li>Dein Spielstand bleibt erhalten</li>
+        <li>Synchronisierung bei Verbindung</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    // Auto-retry connection every 10 seconds
+    setInterval(() => {
+      if (navigator.onLine) {
+        window.location.reload();
+      }
+    }, 10000);
+
+    // Listen for online event
+    window.addEventListener('online', () => {
+      window.location.reload();
+    });
+  </script>
+</body>
+</html>
+
+

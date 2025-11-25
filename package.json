@@ -1,0 +1,53 @@
+{
+    "name": "nebula",
+    "version": "0.1.0",
+    "private": true,
+    "description": "Nebula Supply gum-vape commerce platform",
+    "scripts": {
+        "dev": "concurrently -n \"API,WEB,ADMIN,BOT\" -c \"cyan,green,magenta,yellow\" \"pnpm dev:api\" \"pnpm dev:web\" \"pnpm dev:admin\" \"pnpm dev:bot\"",
+        "dev:web": "pnpm --filter @nebula/web dev",
+        "dev:admin": "pnpm --filter @nebula/admin dev",
+        "dev:admin:full": "concurrently -n \"API,ADMIN\" -c \"cyan,magenta\" \"pnpm dev:api\" \"pnpm dev:admin\"",
+        "dev:api": "pnpm --filter @nebula/api-server dev",
+        "dev:bot": "pnpm --filter @nebula/bot dev",
+        "dev:all": "concurrently \"pnpm dev:web\" \"pnpm dev:admin\" \"pnpm dev:bot\"",
+        "dev:full": "concurrently -n \"API,WEB,ADMIN,BOT\" -c \"cyan,green,magenta,yellow\" \"pnpm dev:api\" \"pnpm dev:web\" \"pnpm dev:admin\" \"pnpm dev:bot\"",
+        "start": "pnpm dev",
+        "build": "pnpm -r build",
+        "build:bot": "pnpm --filter @nebula/bot build",
+        "start:bot": "pnpm --filter @nebula/bot start",
+        "lint": "pnpm -r lint",
+        "lint:bot": "pnpm --filter @nebula/bot lint",
+        "test": "pnpm -r test",
+        "test:e2e": "pnpm --filter @nebula/web test:e2e",
+        "storybook": "pnpm --filter @nebula/web storybook",
+        "test:ci": "pnpm run -r lint && pnpm run -r typecheck && pnpm run -r test",
+        "test:web:auto": "pnpm exec tsx tools/run-web-tests.ts",
+        "typecheck": "pnpm -r typecheck",
+        "typecheck:bot": "pnpm --filter @nebula/bot typecheck",
+        "clean": "pnpm -r clean",
+        "setup": "pnpm install && pnpm build:bot",
+        "health": "pnpm --filter @nebula/bot health"
+    },
+    "devDependencies": {
+        "@eslint/js": "^8.57.1",
+        "@playwright/test": "^1.55.0",
+        "@types/multer": "^2.0.0",
+        "concurrently": "^8.2.2",
+        "eslint": "^8.57.1",
+        "eslint-plugin-jsx-a11y": "^6.10.2",
+        "eslint-plugin-react": "^7.37.2",
+        "eslint-plugin-react-hooks": "^5.1.0",
+        "execa": "^9.6.0",
+        "tsx": "^4.20.5",
+        "typescript": "5.5.4",
+        "typescript-eslint": "^7.18.0",
+        "wait-on": "^9.0.0"
+    },
+    "type": "module",
+    "dependencies": {
+        "@radix-ui/react-alert-dialog": "^1.1.15",
+        "ioredis": "^5.7.0",
+        "pnpm": "^10.18.3"
+    }
+}

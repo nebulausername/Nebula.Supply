@@ -1,0 +1,95 @@
+# Copy this file to .env and adjust values as needed
+
+# Server
+NODE_ENV=development
+PORT=3001
+CLIENT_URL=http://localhost:5173
+
+# Auth
+JWT_SECRET=replace-me
+JWT_REFRESH_SECRET=replace-me-too
+
+# Redis Configuration (optional)
+# Set REDIS_DISABLED=true to disable Redis and use memory cache
+REDIS_DISABLED=true
+
+# Option 1: REDIS_URL (recommended - supports full connection string)
+# REDIS_URL=redis://localhost:6379
+# REDIS_URL=redis://user:password@localhost:6379/0
+# REDIS_URL=rediss://user:password@host:6380/0 (SSL)
+
+# Option 2: Individual settings (alternative to REDIS_URL)
+# REDIS_HOST=localhost
+# REDIS_PORT=6379
+# REDIS_PASSWORD=
+# REDIS_DB=0
+
+# Redis Key Prefix (default: nebula:)
+# REDIS_PREFIX=nebula:
+
+# Cache TTL in seconds (default: 300 = 5 minutes)
+CACHE_TTL=300
+
+# Redis Compression (default: enabled)
+# Automatically compresses values > 1KB to save memory
+# REDIS_COMPRESSION=true
+# REDIS_COMPRESSION_THRESHOLD=1024
+
+# Redis Connection Settings
+# REDIS_MAX_RETRIES=3
+# REDIS_RETRY_DELAY=1000
+# REDIS_HEALTH_CHECK_INTERVAL=30000
+# REDIS_POOL_SIZE=10
+
+# Redis Cluster Mode (optional - for high availability)
+# REDIS_CLUSTER_NODES=[{"host":"localhost","port":7000},{"host":"localhost","port":7001},{"host":"localhost","port":7002}]
+
+# Redis Sentinel Mode (optional - for high availability)
+# REDIS_SENTINELS=[{"host":"localhost","port":26379},{"host":"localhost","port":26380}]
+# REDIS_SENTINEL_NAME=mymaster
+
+# Logging
+LOG_LEVEL=info
+
+# Database (PostgreSQL)
+# Use one of the following:
+# 1) DATABASE_URL (recommended for production)
+# DATABASE_URL=postgres://nebula:nebula@localhost:5432/nebula
+# 2) Individual settings (for development)
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=nebula
+DB_USER=nebula
+DB_PASSWORD=nebula
+
+# Connection Pool Settings (optimized)
+DB_POOL_MAX=20
+DB_POOL_MIN=2
+DB_IDLE_TIMEOUT=30000
+DB_CONNECTION_TIMEOUT=2000
+
+# SSL for managed providers (Railway, Render, Neon, etc.)
+DB_SSL=false
+DB_SSL_REJECT_UNAUTHORIZED=true
+
+# Retry + Fallback Settings
+DB_RETRY_ATTEMPTS=5
+DB_RETRY_DELAY_MS=1000
+# Enable automatic fallback to in-memory DB if PostgreSQL is unavailable (default: true)
+DB_ENABLE_FALLBACK=true
+
+# Force in-memory DB (no PostgreSQL required)
+# Set this to 'memory' to always use in-memory storage
+# DB_TYPE=memory
+
+# Image Storage
+IMAGE_STORAGE_TYPE=local
+IMAGE_STORAGE_PATH=storage/images
+IMAGE_MAX_SIZE_MB=15
+IMAGE_ALLOWED_TYPES=image/jpeg,image/png,image/webp,image/avif,image/gif
+
+
+
+
+
+

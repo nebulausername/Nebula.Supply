@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/nebula-supply-favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nebula Supply - Invite-only Drops & Cosmic Commerce</title>
+    <meta name="theme-color" content="#041612" />
+    <meta name="description" content="Nebula Supply verbindet Telegram-Bot und WebView zu deinem Kontrollzentrum fuer limitierte Vapes, Apparel und Gear." />
+    
+    <!-- Core Web Vitals: Resource Hints for Performance -->
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    
+    <!-- Preload critical resources for faster LCP -->
+    <link rel="preload" href="/nebula-supply-favicon.png" as="image" type="image/png" />
+    <!-- Suppress Chrome extension and invalid resource errors -->
+    <script>
+      (function() {
+        'use strict';
+        
+        // Store original console methods
+        const originalError = console.error;
+        const originalWarn = console.warn;
+        
+        // Suppress console.error from Chrome extensions
+        console.error = function(...args) {
+          const message = String(args.join(' ')).toLowerCase();
+          const shouldSuppress = 
+            message.includes('runtime.lasterror') || 
+            message.includes('message port closed') ||
+            message.includes('chrome-extension://') ||
+            message.includes('denying load') ||
+            message.includes('web_accessible_resources') ||
+            message.includes('net::err_failed') ||
+            message.includes('invalid/') ||
+            message.includes('extension context invalidated');
+          
+          if (shouldSuppress) {
+            return; // Suppress these errors
+          }
+          originalError.apply(console, args);
+        };
+        
+        // Suppress console.warn for extension-related and Telegram WebApp warnings
+        console.warn = function(...args) {
+          const message = String(args.join(' ')).toLowerCase();
+          const shouldSuppress = 
+            message.includes('chrome-extension://') ||
+            message.includes('extension context') ||
+            message.includes('[telegram.webapp]') ||
+            message.includes('closing confirmation is not supported') ||
+            message.includes('header color is not supported') ||
+            message.includes('background color is not supported') ||
+            message.includes('backbutton is not supported') ||
+            message.includes('is not supported in version');
+          
+          if (shouldSuppress) {
+            return;
+          }
+          originalWarn.apply(console, args);
+        };
+
+        // Suppress error events from Chrome extensions
+        window.addEventListener('error', function(e) {
+          const message = String(e.message || '').toLowerCase();
+          const shouldSuppress = 
+            message.includes('chrome-extension') || 
+            message.includes('invalid/') ||
+            message.includes('runtime.lasterror') ||
+            message.includes('message port closed') ||
+            message.includes('denying load') ||
+            message.includes('web_accessible_resources') ||
+            message.includes('net::err_failed') ||
+            message.includes('extension context invalidated');
+          
+          if (shouldSuppress) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            return false;
+          }
+        }, true);
+        
+        // Suppress unhandled promise rejections from extensions
+        window.addEventListener('unhandledrejection', function(e) {
+          const message = String(e.reason || '').toLowerCase();
+          const shouldSuppress = 
+            message.includes('chrome-extension') ||
+            message.includes('runtime.lasterror') ||
+            message.includes('message port closed') ||
+            message.includes('extension context invalidated');
+          
+          if (shouldSuppress) {
+            e.preventDefault();
+            return false;
+          }
+        });
+        
+        // Handle Chrome extension runtime errors
+        if (typeof chrome !== 'undefined' && chrome.runtime) {
+          try {
+            // Suppress runtime.lastError globally
+            Object.defineProperty(chrome.runtime, 'lastError', {
+              get: function() { return undefined; },
+              configurable: true
+            });
+            
+            // Add message listener to prevent errors
+            if (chrome.runtime.onMessage) {
+              chrome.runtime.onMessage.addListener(function() {
+                return true; // Always return true to prevent errors
+              });
+            }
+          } catch (e) {
+            // Ignore errors in extension setup
+          }
+        }
+        
+        // Suppress network errors from extensions
+        const originalFetch = window.fetch;
+        window.fetch = function(...args) {
+          const url = String(args[0] || '');
+          if (url.includes('chrome-extension://') || url.includes('invalid/')) {
+            return Promise.reject(new Error('Suppressed extension request'));
+          }
+          return originalFetch.apply(window, args).catch(function(error) {
+            const errorMsg = String(error.message || '').toLowerCase();
+            if (errorMsg.includes('chrome-extension') || errorMsg.includes('net::err_failed')) {
+              // Suppress extension-related fetch errors
+              return Promise.reject(new Error('Suppressed extension error'));
+            }
+            throw error;
+          });
+        };
+      })();
+    </script>
+  </head>
+  <body class="bg-black">
+    <!-- Early shims to avoid "process is not defined" before the app boots -->
+    <script>
+      (function() {
+        if (!window.process) {
+          window.process = { env: {} };
+        } else if (!window.process.env) {
+          window.process.env = {};
+        }
+        if (!window.global) {
+          window.global = window;
+        }
+      })();
+    </script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

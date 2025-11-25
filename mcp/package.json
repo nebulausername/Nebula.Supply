@@ -1,0 +1,36 @@
+{
+  "name": "@nebula/mcp-servers",
+  "version": "1.0.0",
+  "description": "MCP Servers for Nebula Supply Project",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start:fs": "node servers/nebula-fs.js",
+    "start:git": "node servers/nebula-git.js",
+    "start:shell": "node servers/nebula-shell.js",
+    "start:http": "node servers/nebula-http.js",
+    "start:playwright": "node servers/nebula-playwright.js",
+    "start:eyes": "node servers/nebula-eyes-simple.js",
+    "start:all": "concurrently \"npm run start:fs\" \"npm run start:git\" \"npm run start:shell\" \"npm run start:http\" \"npm run start:playwright\" \"npm run start:eyes\"",
+    "install:deps": "npm install",
+    "test": "echo \"MCP Servers ready\""
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.5.0",
+    "playwright": "^1.40.0",
+    "concurrently": "^8.2.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "nebula",
+    "automation",
+    "ai-agent"
+  ],
+  "author": "Nebula Supply Team",
+  "license": "MIT"
+}
+

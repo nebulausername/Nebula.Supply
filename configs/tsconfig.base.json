@@ -1,0 +1,25 @@
+﻿{
+    "compilerOptions":  {
+                            "target":  "ES2022",
+                            "module":  "ESNext",
+                            "moduleResolution":  "Node",
+                            "lib":  [
+                                        "DOM",
+                                        "DOM.Iterable",
+                                        "ES2022"
+                                    ],
+                            "jsx":  "react-jsx",
+                            "strict":  true,
+                            "noEmit":  true,
+                            "resolveJsonModule":  true,
+                            "isolatedModules":  true,
+                            "esModuleInterop":  true,
+                            "skipLibCheck":  true,
+                            "allowSyntheticDefaultImports":  true,
+                            "types":  [
+                                          "vitest/globals",
+                                          "vite/client",
+                                          "@testing-library/jest-dom"
+                                      ]
+                        }
+}

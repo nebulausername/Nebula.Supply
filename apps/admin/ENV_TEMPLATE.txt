@@ -1,0 +1,20 @@
+# Copy this file to .env.local and adjust values as needed
+# File: apps/admin/.env.local
+
+# Admin Dashboard Environment Variables
+# API Configuration
+VITE_API_URL=http://localhost:3001
+VITE_WS_URL=http://localhost:3001
+
+# Development Mode
+VITE_DEV_MODE=true
+
+# Logging Level (debug, info, warn, error)
+VITE_LOG_LEVEL=info
+
+# Feature Flags
+VITE_ENABLE_WEBSOCKET=true
+VITE_ENABLE_REALTIME_UPDATES=true
+
+
+

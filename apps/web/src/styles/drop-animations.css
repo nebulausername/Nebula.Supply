@@ -1,0 +1,374 @@
+/* 🎨 Drop Animations - Nebula Supply UX Optimization */
+
+/* 🎯 Card Entrance Animations */
+@keyframes dropCardEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dropCardStagger {
+  0% {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 🎯 Price Pulsing Animation */
+@keyframes pricePulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.9;
+  }
+}
+
+@keyframes priceGlow {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(11, 247, 188, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(11, 247, 188, 0.6), 0 0 30px rgba(11, 247, 188, 0.3);
+  }
+}
+
+/* 🎯 Badge Glow Animation */
+@keyframes badgeGlow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(11, 247, 188, 0.4);
+    filter: brightness(1);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(11, 247, 188, 0.8), 0 0 24px rgba(11, 247, 188, 0.4);
+    filter: brightness(1.2);
+  }
+}
+
+@keyframes badgeVIP {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(255, 94, 219, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(255, 94, 219, 0.8), 0 0 24px rgba(255, 94, 219, 0.4);
+  }
+}
+
+@keyframes badgeLimited {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(251, 191, 36, 0.8), 0 0 24px rgba(251, 191, 36, 0.4);
+  }
+}
+
+/* 🎯 Progress Bar Shimmer */
+@keyframes progressShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes progressFill {
+  0% {
+    transform: scaleX(0);
+    transform-origin: left;
+  }
+  100% {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+}
+
+/* 🎯 Success Celebration */
+@keyframes successBounce {
+  0%, 100% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.1);
+  }
+  50% {
+    transform: scale(0.95);
+  }
+  75% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes successConfetti {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-100px) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+@keyframes successRipple {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+/* 🎯 Hover Effects */
+@keyframes hoverFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes hoverGlow {
+  0% {
+    box-shadow: 0 8px 24px rgba(11, 247, 188, 0.15);
+  }
+  100% {
+    box-shadow: 0 16px 48px rgba(11, 247, 188, 0.25), 0 0 60px rgba(11, 247, 188, 0.15);
+  }
+}
+
+/* 🎯 Gradient Animation */
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes gradientRotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* 🎯 Loading States */
+@keyframes skeletonPulse {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes skeletonShimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* 🎯 Interactive Feedback */
+@keyframes buttonPress {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(0);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+/* 🎯 Variant Selection */
+@keyframes variantSelect {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(11, 247, 188, 0.7);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 8px rgba(11, 247, 188, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(11, 247, 188, 0);
+  }
+}
+
+@keyframes variantHighlight {
+  0%, 100% {
+    border-color: rgba(11, 247, 188, 0.4);
+    background-color: rgba(11, 247, 188, 0.1);
+  }
+  50% {
+    border-color: rgba(11, 247, 188, 0.8);
+    background-color: rgba(11, 247, 188, 0.15);
+  }
+}
+
+/* 🎯 Stock Alert */
+@keyframes stockWarning {
+  0%, 100% {
+    color: #fbbf24;
+    text-shadow: 0 0 8px rgba(251, 191, 36, 0.5);
+  }
+  50% {
+    color: #f59e0b;
+    text-shadow: 0 0 16px rgba(251, 191, 36, 0.8);
+  }
+}
+
+/* 🎯 Utility Classes */
+.drop-card-enter {
+  animation: dropCardEnter 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.drop-card-stagger {
+  animation: dropCardStagger 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.price-pulse {
+  animation: pricePulse 2s ease-in-out infinite;
+}
+
+.price-glow {
+  animation: priceGlow 2s ease-in-out infinite;
+}
+
+.badge-glow {
+  animation: badgeGlow 2s ease-in-out infinite;
+}
+
+.badge-vip-glow {
+  animation: badgeVIP 2s ease-in-out infinite;
+}
+
+.badge-limited-glow {
+  animation: badgeLimited 2s ease-in-out infinite;
+}
+
+.progress-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(11, 247, 188, 0.3),
+    transparent
+  );
+  background-size: 200% 100%;
+  animation: progressShimmer 2s ease-in-out infinite;
+}
+
+.progress-fill {
+  animation: progressFill 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.success-bounce {
+  animation: successBounce 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.success-ripple {
+  animation: successRipple 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hover-float {
+  animation: hoverFloat 2s ease-in-out infinite;
+}
+
+.hover-glow {
+  transition: box-shadow 0.3s ease;
+}
+
+.hover-glow:hover {
+  animation: hoverGlow 0.3s forwards;
+}
+
+.gradient-shift {
+  background-size: 200% 200%;
+  animation: gradientShift 4s ease infinite;
+}
+
+.gradient-rotate {
+  animation: gradientRotate 8s linear infinite;
+}
+
+.skeleton-pulse {
+  animation: skeletonPulse 1.5s ease-in-out infinite;
+}
+
+.button-press {
+  animation: buttonPress 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.variant-select {
+  animation: variantSelect 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.variant-highlight {
+  animation: variantHighlight 1.5s ease-in-out infinite;
+}
+
+.stock-warning {
+  animation: stockWarning 1.5s ease-in-out infinite;
+}
+
+/* 🎯 Performance Optimizations */
+.will-animate {
+  will-change: transform, opacity;
+}
+
+.gpu-accelerated {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* 🎯 Stagger Delays for Lists */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.1s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.2s; }
+.stagger-5 { animation-delay: 0.25s; }
+.stagger-6 { animation-delay: 0.3s; }
+
+
+
+
+

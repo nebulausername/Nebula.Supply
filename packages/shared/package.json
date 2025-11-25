@@ -1,0 +1,41 @@
+﻿{
+  "name": "@nebula/shared",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    "./tokens": {
+      "types": "./src/tokens.ts",
+      "default": "./src/tokens.ts"
+    },
+    "./theme": {
+      "types": "./src/theme.ts",
+      "default": "./src/theme.ts"
+    },
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc --emitDeclarationOnly",
+    "lint": "eslint ./src",
+    "typecheck": "tsc --noEmit",
+    "test": "echo 'No tests in shared package' && exit 0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^8.57.1",
+    "@types/jsonwebtoken": "^9.0.5",
+    "eslint": "^8.57.1",
+    "typescript-eslint": "^7.18.0",
+    "vitest": "^2.1.4",
+    "typescript": "5.5.4"
+  },
+  "dependencies": {
+    "zod": "^3.23.8",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts"
+}

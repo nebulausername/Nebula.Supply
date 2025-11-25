@@ -1,0 +1,10 @@
+# OPEN_ISSUES
+
+- **High** – TypeScript build fails because `ShopPage.tsx` stores escaped `\n` markers and control characters inline, so `pnpm build` cannot transpile (apps/web/src/pages/ShopPage.tsx:1).
+- **High** – Product catalog points to `/images/products/*.png` but no assets ship; product cards render broken images and lack lazy/error handling to soften the failure (packages/shared/src/data/products.ts:41, apps/web/src/components/shop/ProductCard.tsx:62).
+- **High** – Currency copy uses `?` placeholders instead of `€`, impacting rewards text in web and admin surfaces (packages/shared/src/data/coinRewards.ts:7, apps/admin/src/data/kpis.ts:3, apps/web/src/components/DropCard.tsx:64).
+- **Medium** – Coin earn/burn logic in code stops at static tiers; spec still expects +5% earn and +100 preorder reward enforcement server-side (packages/shared/src/data/coinRewards.ts:3, agent.md:465, agent.md:531).
+- **Medium** – Drops mock feed starts a global interval and Shop store subscribes without cleanup, leaving timers/listeners running after navigation (apps/web/src/pages/DropsPage.tsx:100, apps/web/src/store/drops.ts:114, apps/web/src/api/shop.ts:44).
+- **Medium** – Preorder and checkout flows are placeholders: modal CTA only links to Telegram, and Cart/Profile/Support pages announce missing backend features (apps/web/src/components/DropModal.tsx:120, apps/web/src/components/shop/ProductModal.tsx:159, apps/web/src/pages/CartPage.tsx:5, apps/web/src/pages/ProfilePage.tsx:5, apps/web/src/pages/SupportPage.tsx:5).
+- **Low** – `ProductImage` component with lazy fallback remains unused, so there is no branded placeholder when product requests fail (apps/web/src/components/media/ProductImage.tsx:10).
+- **Low** – Invite highlight strings rely on control characters (`\u001a`, `\u0007`) rendering odd glyphs in the shop header (apps/web/src/pages/ShopPage.tsx:1).

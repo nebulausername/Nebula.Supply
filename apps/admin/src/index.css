@@ -1,0 +1,31 @@
+﻿/* All @import statements must come before @tailwind directives */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Orbitron:wght@400;500;600;700;800;900&display=swap');
+@import './styles/responsive.css';
+@import './styles/animations.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --theme-bg: #000000;
+  --theme-surface: #0B0B12;
+  --theme-surface-secondary: #050509;
+  --theme-text: #FFFFFF;
+  --theme-text-muted: #A0A0A0;
+  --theme-border: rgba(255, 255, 255, 0.1);
+  --theme-border-hover: rgba(255, 255, 255, 0.2);
+  --theme-accent: #3B82F6;
+  --theme-accent-light: #60A5FA;
+}
+
+body {
+  @apply bg-background text-text min-h-screen;
+  background-color: var(--theme-bg);
+  color: var(--theme-text);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+#root {
+  @apply min-h-screen;
+}

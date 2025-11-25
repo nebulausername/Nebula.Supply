@@ -1,0 +1,162 @@
+/* 🎨 Landing Page Custom Styles - Expert Level */
+
+/* Hide Telegram Widget Invalid Messages */
+iframe[src*="telegram"] ~ * {
+  font-size: 0 !important;
+}
+
+iframe[src*="telegram"] ~ *:contains("invalid"),
+iframe[src*="telegram"] ~ *:contains("Invalid") {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+/* Custom Scrollbar - Dunkles Theme */
+.landing-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.landing-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.landing-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.landing-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Firefox Scrollbar */
+.landing-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) rgba(0, 0, 0, 0.2);
+}
+
+/* Cosmic Background Effects - Performance Optimized */
+@keyframes cosmic-float {
+  0%, 100% {
+    transform: translateY(0) translateX(0);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translateY(-20px) translateX(10px);
+    opacity: 0.5;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.shimmer-effect {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(0, 191, 251, 0.1) 50%,
+    transparent 100%
+  );
+  background-size: 1000px 100%;
+  animation: shimmer 3s infinite;
+}
+
+.animate-shimmer {
+  background-size: 200% 100%;
+  animation: shimmer 3s infinite;
+}
+
+/* Glow Effect für wichtige Elemente */
+.glow-effect {
+  position: relative;
+}
+
+.glow-effect::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: linear-gradient(45deg, rgba(0, 191, 251, 0.3), rgba(97, 244, 244, 0.3));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: -1;
+  filter: blur(8px);
+}
+
+.glow-effect:hover::before {
+  opacity: 1;
+}
+
+.cosmic-bg {
+  position: relative;
+  overflow: hidden;
+}
+
+.cosmic-bg::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(circle at 20% 50%, rgba(0, 191, 251, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(97, 244, 244, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 40% 20%, rgba(139, 92, 246, 0.05) 0%, transparent 50%);
+  pointer-events: none;
+  animation: cosmic-float 20s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+/* Reduce Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  .cosmic-bg::before {
+    animation: none;
+  }
+  
+  .landing-scrollbar::-webkit-scrollbar-thumb {
+    transition: none;
+  }
+}
+
+/* Safe Area Support für Notch-Devices */
+@supports (padding: max(0px)) {
+  .safe-area-top {
+    padding-top: max(1rem, env(safe-area-inset-top));
+  }
+  
+  .safe-area-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  
+  .safe-area-left {
+    padding-left: max(1rem, env(safe-area-inset-left));
+  }
+  
+  .safe-area-right {
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+}
+
+/* Focus Styles für Accessibility */
+.focus-visible-ring {
+  @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-black;
+}
+
+/* Tap Target Minimum Size für Mobile */
+@media (max-width: 768px) {
+  .tap-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+

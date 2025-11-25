@@ -1,0 +1,54 @@
+{
+  "mcpServers": {
+    "nebula-fs": {
+      "command": "node",
+      "args": ["C:\\Users\\issab\\Desktop\\TETETTE\\mcp\\servers\\nebula-fs.js"],
+      "env": {
+        "ALLOW": ".apps,.packages,.tests,.configs,.docs,.tools,.reports"
+      }
+    },
+    "nebula-git": {
+      "command": "node",
+      "args": ["C:\\Users\\issab\\Desktop\\TETETTE\\mcp\\servers\\nebula-git.js"],
+      "env": {
+        "GIT_SAFE": "1",
+        "GIT_USER": "Nebula Agent",
+        "GIT_EMAIL": "agent@nebula.local"
+      }
+    },
+    "nebula-shell": {
+      "command": "node",
+      "args": ["C:\\Users\\issab\\Desktop\\TETETTE\\mcp\\servers\\nebula-shell.js"],
+      "env": {
+        "ALLOW_CMDS": "pnpm,npm,node,git,tsc,eslint,vitest,playwright,drizzle-kit,vite,build,dev,test,lint,typecheck,install,run,start,stop,restart"
+      }
+    },
+    "nebula-http": {
+      "command": "node",
+      "args": ["C:\\Users\\issab\\Desktop\\TETETTE\\mcp\\servers\\nebula-http.js"],
+      "env": {
+        "DEFAULT_TIMEOUT": "30000",
+        "MAX_RETRIES": "3"
+      }
+    },
+    "nebula-playwright": {
+      "command": "node",
+      "args": ["C:\\Users\\issab\\Desktop\\TETETTE\\mcp\\servers\\nebula-playwright.js"],
+      "env": {
+        "HEADLESS": "false",
+        "TIMEOUT": "30000",
+        "SCREENSHOT_PATH": "C:\\Users\\issab\\Desktop\\TETETTE\\screenshots"
+      }
+    },
+    "nebula-eyes": {
+      "command": "node",
+      "args": ["C:\\Users\\issab\\Desktop\\TETETTE\\mcp\\servers\\nebula-eyes-simple.js"],
+      "env": {
+        "SCREENSHOT_QUALITY": "high",
+        "MULTI_DISPLAY": "true",
+        "AUTO_SCROLL": "true"
+      }
+    }
+  }
+}
+
