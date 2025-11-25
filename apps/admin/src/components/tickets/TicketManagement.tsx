@@ -636,13 +636,24 @@ export const TicketManagement = memo(function TicketManagement() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const handleCreateTicketSuccess = useCallback(() => {
+  const handleCreateTicketSuccess = useCallback((ticketId?: string) => {
     setIsCreateTicketModalOpen(false);
-    // Refetch tickets to show the new one
-    refetch();
-    toast.success('Ticket created', 'The ticket has been created successfully');
-    logger.info('Ticket created successfully via shortcut');
-  }, [refetch, toast]);
+    
+    // If we have a ticket ID, open it immediately
+    if (ticketId) {
+      // Wait a bit for the ticket to be available in the API
+      setTimeout(() => {
+        handleTicketClick(ticketId);
+        toast.success('Ticket erstellt! 🎉', 'Das Ticket wurde erfolgreich erstellt und geöffnet');
+        logger.info('Ticket created and opened', { ticketId });
+      }, 500);
+    } else {
+      // Refetch tickets to show the new one
+      refetch();
+      toast.success('Ticket erstellt! 🎉', 'Das Ticket wurde erfolgreich erstellt');
+      logger.info('Ticket created successfully');
+    }
+  }, [refetch, toast, handleTicketClick]);
 
   return (
     <div className="flex flex-col h-full gap-4">

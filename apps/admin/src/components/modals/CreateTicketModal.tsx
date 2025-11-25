@@ -18,7 +18,7 @@ const TicketTemplates = lazy(() =>
 interface CreateTicketModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess?: () => void;
+  onSuccess?: (ticketId?: string) => void;
 }
 
 const PRIORITIES = [
@@ -76,10 +76,13 @@ export function CreateTicketModal({ isOpen, onClose, onSuccess }: CreateTicketMo
         tags: []
       };
 
-      await createTicketMutation.mutateAsync(ticketData);
+      const response = await createTicketMutation.mutateAsync(ticketData);
       
-      logger.info('Ticket created successfully', { subject, priority, category });
-      showToast({ type: 'success', title: 'Ticket created successfully' });
+      // Extract ticket ID from response (handle different formats)
+      const ticketId = response?.data?.id || response?.data?.data?.id || response?.id || response?.data;
+      
+      logger.info('Ticket created successfully', { subject, priority, category, ticketId });
+      showToast({ type: 'success', title: 'Ticket erstellt! 🎉', message: 'Das Ticket wurde erfolgreich erstellt' });
       
       // Reset form
       setSubject('');
@@ -88,7 +91,8 @@ export function CreateTicketModal({ isOpen, onClose, onSuccess }: CreateTicketMo
       setCategory('support');
       setUserId('');
       
-      onSuccess?.();
+      // Pass ticket ID to success handler so it can open the ticket
+      onSuccess?.(ticketId);
       onClose();
     } catch (error) {
       logger.error('Failed to create ticket', { error });

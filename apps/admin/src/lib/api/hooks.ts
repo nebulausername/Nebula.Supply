@@ -285,24 +285,33 @@ export const useCreateTicket = () => {
     },
 
     onSuccess: (newTicket, variables, context) => {
+      // Extract ticket from response (handle different formats)
+      const createdTicket = newTicket?.data || newTicket?.data?.data || newTicket;
+      
       // Replace temporary ticket with real one
       queryClient.setQueriesData(
         { queryKey: queryKeys.tickets.list() },
         (old: any) => {
           if (!old?.data) return old;
+          
+          // Remove optimistic ticket and add real one
+          const filtered = Array.isArray(old.data) 
+            ? old.data.filter((t: any) => !t.isOptimistic)
+            : [];
+          
           return {
             ...old,
-            data: old.data.map((ticket: any) =>
-              ticket.id === context?.tempTicket.id ? newTicket : ticket
-            )
+            data: createdTicket ? [createdTicket, ...filtered] : filtered
           };
         }
       );
 
-      // Set detail query
-      queryClient.setQueryData(queryKeys.tickets.detail(newTicket.id), newTicket);
-
-      // Background refetch for consistency
+      // Set detail query with extracted ticket
+      if (createdTicket?.id) {
+        queryClient.setQueryData(queryKeys.tickets.detail(createdTicket.id), createdTicket);
+      }
+      
+      // Invalidate queries for consistency
       queryClient.invalidateQueries({ 
         queryKey: queryKeys.tickets.list(),
         refetchType: 'active'
@@ -316,7 +325,7 @@ export const useCreateTicket = () => {
         refetchType: 'active'
       });
 
-      logger.info('Ticket created successfully', { ticketId: newTicket.id });
+      logger.info('Ticket created successfully', { ticketId: createdTicket?.id || 'unknown' });
     },
 
     onError: (error, variables, context) => {
