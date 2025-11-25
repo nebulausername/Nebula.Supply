@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Clock, User, Tag, ChevronRight, AlertCircle, Zap, Flame } from 'lucide-react';
 import { Card } from '../ui/Card';
@@ -44,8 +44,31 @@ const priorityGlows: Record<TicketPriority, string> = {
 };
 
 export const TicketCard = memo(function TicketCard({ ticket, isSelected, isActive, onClick, onSelect }: TicketCardProps) {
-  const isOverdue = ticket.slaDueAt && new Date(ticket.slaDueAt) < new Date();
+  const isOverdue = useMemo(
+    () => ticket.slaDueAt && new Date(ticket.slaDueAt) < new Date(),
+    [ticket.slaDueAt]
+  );
   const PriorityIcon = priorityIcons[ticket.priority];
+  
+  // Memoize formatted dates
+  const formattedCreatedDate = useMemo(
+    () => new Date(ticket.createdAt).toLocaleDateString('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }),
+    [ticket.createdAt]
+  );
+  
+  const formattedUpdatedDate = useMemo(
+    () => new Date(ticket.updatedAt).toLocaleDateString('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+    [ticket.updatedAt]
+  );
 
   return (
     <motion.div
@@ -159,12 +182,7 @@ export const TicketCard = memo(function TicketCard({ ticket, isSelected, isActiv
               <div className="flex items-center gap-1">
                 <Clock className="h-3 w-3" />
                 <span>
-                  {new Date(ticket.updatedAt).toLocaleDateString('de-DE', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  {formattedUpdatedDate}
                 </span>
               </div>
               {isOverdue && (

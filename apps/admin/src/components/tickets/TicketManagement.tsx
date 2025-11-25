@@ -3,11 +3,21 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { LayoutGrid, List, Calendar, Filter, X, Bell, RefreshCw, Menu, Ticket as TicketIcon } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
+import { lazy, Suspense } from 'react';
 import { TicketListView } from './TicketListView';
-import { TicketKanbanBoard } from './TicketKanbanBoard';
 import { TicketFilters } from './TicketFilters';
-import { TicketStats } from './TicketStats';
-import { TicketDetailPanel } from './TicketDetailPanel';
+import { TicketLoadingSkeleton } from './TicketLoadingSkeleton';
+
+// Lazy load heavy components for code splitting
+const TicketKanbanBoard = lazy(() => 
+  import('./TicketKanbanBoard').then(module => ({ default: module.TicketKanbanBoard }))
+);
+const TicketStats = lazy(() => 
+  import('./TicketStats').then(module => ({ default: module.TicketStats }))
+);
+const TicketDetailPanel = lazy(() => 
+  import('./TicketDetailPanel').then(module => ({ default: module.TicketDetailPanel }))
+);
 import { BulkActionsBar } from './BulkActionsBar';
 import { CreateTicketModal } from '../modals/CreateTicketModal';
 import { MobileTicketSheet } from './MobileTicketSheet';
@@ -15,6 +25,7 @@ import { FilterChips } from './FilterChips';
 import { QuickFilters } from './QuickFilters';
 import { TicketNotificationCenter } from './TicketNotificationCenter';
 import { TicketShortcutsHelp } from './TicketShortcutsHelp';
+import { SavedFiltersMenu } from './SavedFiltersMenu';
 import { useTicketNotifications } from '../../hooks/useTicketNotifications';
 import { useTickets, useTicketStats, queryKeys } from '../../lib/api/hooks';
 import { useRealtimeTickets } from '../../lib/realtime/hooks/useRealtimeTickets';
@@ -443,6 +454,11 @@ export const TicketManagement = memo(function TicketManagement() {
     setActivePreset('all');
   }, []);
 
+  const handleLoadSavedFilter = useCallback((loadedFilters: TicketFiltersType) => {
+    setFilters(loadedFilters);
+    setActivePreset('custom');
+  }, []);
+
   // Enhanced keyboard shortcuts with 'g' prefix support
   const [gKeyPressed, setGKeyPressed] = useState(false);
 
@@ -764,6 +780,12 @@ export const TicketManagement = memo(function TicketManagement() {
             </Button>
           </div>
 
+          {/* Saved Filters Menu */}
+          <SavedFiltersMenu
+            currentFilters={filters}
+            onLoadFilter={handleLoadSavedFilter}
+          />
+
           {/* Filter Toggle */}
           <Button
             variant={showFilters ? 'default' : 'outline'}
@@ -850,7 +872,9 @@ export const TicketManagement = memo(function TicketManagement() {
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.3 }}
           >
-            <TicketStats stats={stats?.data} />
+            <Suspense fallback={<TicketLoadingSkeleton count={1} variant="card" />}>
+              <TicketStats stats={stats?.data} />
+            </Suspense>
           </motion.div>
         )}
       </AnimatePresence>
@@ -954,11 +978,13 @@ export const TicketManagement = memo(function TicketManagement() {
           )}
 
           {viewMode === 'kanban' && (
-            <TicketKanbanBoard
-              tickets={filteredTickets}
-              isLoading={isLoading}
-              onTicketClick={handleTicketClick}
-            />
+            <Suspense fallback={<TicketLoadingSkeleton count={5} variant="card" />}>
+              <TicketKanbanBoard
+                tickets={filteredTickets}
+                isLoading={isLoading}
+                onTicketClick={handleTicketClick}
+              />
+            </Suspense>
           )}
 
           {viewMode === 'calendar' && (
@@ -979,10 +1005,12 @@ export const TicketManagement = memo(function TicketManagement() {
         {/* Ticket Detail Panel */}
         <AnimatePresence>
           {selectedTicketId && (
-            <TicketDetailPanel
-              ticketId={selectedTicketId}
-              onClose={handleTicketClose}
-            />
+            <Suspense fallback={<TicketLoadingSkeleton count={1} variant="card" />}>
+              <TicketDetailPanel
+                ticketId={selectedTicketId}
+                onClose={handleTicketClose}
+              />
+            </Suspense>
           )}
         </AnimatePresence>
       </div>
