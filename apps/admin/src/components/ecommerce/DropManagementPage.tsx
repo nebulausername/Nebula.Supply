@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, Suspense, lazy } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -18,7 +18,8 @@ import {
   Flame,
   Users,
   Package,
-  Sparkles
+  Sparkles,
+  Loader2
 } from 'lucide-react';
 import { DropManagement } from './DropManagementOptimized';
 import { useErrorHandler } from '../../lib/hooks/useErrorHandler';
@@ -27,14 +28,49 @@ import { useDebounce } from '../../lib/hooks/useDebounce';
 import { logger } from '../../lib/logger';
 import { TabErrorBoundary } from './TabErrorBoundary';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
-
-// Import drop management components
-import { DropScheduler } from './DropScheduler';
-import { DropManagementLive } from './DropManagementLive';
-import { DropProductSync } from './DropProductSync';
-import { ShippingConfigForm } from './ShippingConfigForm';
-import { DropAnalytics } from './DropAnalytics';
 import { useDrops, useUpdateDrop } from '../../lib/api/hooks';
+
+// Lazy load drop management components for better code splitting with error handling
+const DropScheduler = lazy(() => 
+  import('./DropScheduler')
+    .then(m => ({ default: m.DropScheduler }))
+    .catch(err => {
+      logger.error('Failed to load DropScheduler', { error: err });
+      return { default: () => <div className="p-4 text-muted-foreground">DropScheduler konnte nicht geladen werden</div> };
+    })
+);
+const DropManagementLive = lazy(() => 
+  import('./DropManagementLive')
+    .then(m => ({ default: m.DropManagementLive }))
+    .catch(err => {
+      logger.error('Failed to load DropManagementLive', { error: err });
+      return { default: () => <div className="p-4 text-muted-foreground">DropManagementLive konnte nicht geladen werden</div> };
+    })
+);
+const DropProductSync = lazy(() => 
+  import('./DropProductSync')
+    .then(m => ({ default: m.DropProductSync }))
+    .catch(err => {
+      logger.error('Failed to load DropProductSync', { error: err });
+      return { default: () => <div className="p-4 text-muted-foreground">DropProductSync konnte nicht geladen werden</div> };
+    })
+);
+const DropAnalytics = lazy(() => 
+  import('./DropAnalytics')
+    .then(m => ({ default: m.DropAnalytics }))
+    .catch(err => {
+      logger.error('Failed to load DropAnalytics', { error: err });
+      return { default: () => <div className="p-4 text-muted-foreground">DropAnalytics konnte nicht geladen werden</div> };
+    })
+);
+const ShippingConfigForm = lazy(() => 
+  import('./ShippingConfigForm')
+    .then(m => ({ default: m.ShippingConfigForm }))
+    .catch(err => {
+      logger.error('Failed to load ShippingConfigForm', { error: err });
+      return { default: () => <div className="p-4 text-muted-foreground">ShippingConfigForm konnte nicht geladen werden</div> };
+    })
+);
 
 // Shipping Config Tab Component
 function ShippingConfigTab() {
@@ -99,11 +135,17 @@ function ShippingConfigTab() {
 
       {/* Shipping Config Form */}
       {selectedDrop && (
-        <ShippingConfigForm
-          shippingOptions={selectedDrop.shippingOptions || []}
-          onSave={handleSaveShipping}
-          type="drop"
-        />
+        <Suspense fallback={
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
+          </div>
+        }>
+          <ShippingConfigForm
+            shippingOptions={selectedDrop.shippingOptions || []}
+            onSave={handleSaveShipping}
+            type="drop"
+          />
+        </Suspense>
       )}
     </div>
   );
@@ -290,7 +332,13 @@ export function DropManagementPage() {
               <DropManagement viewMode={viewMode} searchTerm={debouncedDropSearchTerm} />
               
               <div className="mt-4">
-                <DropManagementLive />
+                <Suspense fallback={
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
+                  </div>
+                }>
+                  <DropManagementLive />
+                </Suspense>
               </div>
             </TabErrorBoundary>
           </Card>
@@ -316,7 +364,13 @@ export function DropManagementPage() {
             </div>
 
             <TabErrorBoundary tabName="Scheduler">
-              <DropScheduler />
+              <Suspense fallback={
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
+                </div>
+              }>
+                <DropScheduler />
+              </Suspense>
             </TabErrorBoundary>
           </Card>
         </TabsContent>
@@ -341,7 +395,13 @@ export function DropManagementPage() {
             </div>
 
             <TabErrorBoundary tabName="Sync">
-              <DropProductSync />
+              <Suspense fallback={
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-green-400" />
+                </div>
+              }>
+                <DropProductSync />
+              </Suspense>
             </TabErrorBoundary>
           </Card>
         </TabsContent>
@@ -375,7 +435,13 @@ export function DropManagementPage() {
             </div>
 
             <TabErrorBoundary tabName="Analytics">
-              <DropAnalytics />
+              <Suspense fallback={
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-pink-400" />
+                </div>
+              }>
+                <DropAnalytics />
+              </Suspense>
             </TabErrorBoundary>
           </Card>
         </TabsContent>
@@ -383,4 +449,7 @@ export function DropManagementPage() {
     </div>
   );
 }
+
+// Default export for dynamic imports
+export default DropManagementPage;
 

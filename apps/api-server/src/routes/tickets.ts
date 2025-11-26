@@ -753,6 +753,78 @@ router.post('/:id/replies', [
     logger.debug('WebSocket not available for ticket message broadcast', { ticketId: id });
   }
 
+  // Send Telegram notification to user if agent replied
+  // Only send if message is from agent (not from user or bot)
+  if (from === 'agent' && (updatedTicket as any).telegramUserId) {
+    try {
+      // Check user notification preferences
+      const userId = (updatedTicket as any).telegramUserId || (updatedTicket as any).userId;
+      let shouldNotify = true;
+      
+      if (userId) {
+        try {
+          const users = await databaseService.findMany('users');
+          const user = users.find((u: any) => 
+            u.id === userId || 
+            u.telegram_id === userId || 
+            String(u.telegram_id) === String(userId) ||
+            String(u.id) === String(userId)
+          );
+          
+          if (user && (user as any).notificationPreferences) {
+            const prefs = (user as any).notificationPreferences;
+            // Check if Telegram notifications are enabled and ticket messages are enabled
+            shouldNotify = prefs.telegramEnabled !== false && prefs.ticketMessages !== false;
+            
+            if (!shouldNotify) {
+              logger.debug('Telegram notification skipped due to user preferences', {
+                ticketId: id,
+                userId,
+                telegramEnabled: prefs.telegramEnabled,
+                ticketMessages: prefs.ticketMessages
+              });
+            }
+          }
+        } catch (prefError) {
+          // If we can't check preferences, default to sending notification
+          logger.debug('Could not check user preferences, defaulting to send notification', {
+            error: prefError instanceof Error ? prefError.message : String(prefError)
+          });
+        }
+      }
+      
+      if (shouldNotify) {
+        // Get sender name from request or use default
+        const senderName = (req as any).user?.name || (req as any).user?.username || 'Support Team';
+        
+        await telegramNotificationService.sendTicketMessageNotification(
+          {
+            id: updatedTicket.id,
+            subject: (updatedTicket as any).subject || 'Ticket',
+            telegramUserId: (updatedTicket as any).telegramUserId,
+            userId: (updatedTicket as any).userId
+          },
+          {
+            text: sanitizedMessage,
+            senderName,
+            timestamp: messageData.timestamp
+          }
+        );
+        
+        logger.info('Telegram notification sent for agent reply', {
+          ticketId: id,
+          telegramUserId: (updatedTicket as any).telegramUserId
+        });
+      }
+    } catch (error) {
+      // Don't fail the request if notification fails
+      logger.warn('Failed to send Telegram notification for ticket message', {
+        error: error instanceof Error ? error.message : String(error),
+        ticketId: id
+      });
+    }
+  }
+
   res.json({
     success: true,
     data: {

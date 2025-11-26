@@ -220,21 +220,28 @@ export const useProfileRealtime = (options: UseProfileRealtimeOptions = {}) => {
     }
   }, [isConnected, sendMessage, userId]);
 
-  // Auto-refresh fallback (polling) - only if connected
+  // Auto-refresh fallback (polling) - only if connected - debounced
   useEffect(() => {
     if (!autoRefresh || !enabled || !isConnected) return;
 
-    const interval = setInterval(() => {
-      // Trigger a refresh by sending a request
-      if (sendMessage && isConnected) {
-        sendMessage({
-          type: 'profile:request_update',
-          data: { userId }
-        });
-      }
-    }, refreshInterval);
+    // Debounce refresh requests to prevent spam
+    let timeoutId: NodeJS.Timeout;
+    const scheduleRefresh = () => {
+      timeoutId = setTimeout(() => {
+        if (sendMessage && isConnected) {
+          sendMessage({
+            type: 'profile:request_update',
+            data: { userId }
+          });
+        }
+        scheduleRefresh();
+      }, refreshInterval);
+    };
 
-    return () => clearInterval(interval);
+    scheduleRefresh();
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [autoRefresh, enabled, refreshInterval, sendMessage, userId, isConnected]);
 
   // Auto-cleanup old activities

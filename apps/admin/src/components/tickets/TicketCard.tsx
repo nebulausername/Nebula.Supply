@@ -1,8 +1,10 @@
-import { memo } from 'react';
+import { memo, useMemo, useCallback, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Clock, User, Tag, ChevronRight, AlertCircle, Zap, Flame } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
+import { useQueryClient } from '@tanstack/react-query';
+import { prefetchTicket } from '../../lib/api/hooks';
 import type { Ticket, TicketStatus, TicketPriority } from '@nebula/shared/types';
 import { cn } from '../../utils/cn';
 
@@ -44,8 +46,58 @@ const priorityGlows: Record<TicketPriority, string> = {
 };
 
 export const TicketCard = memo(function TicketCard({ ticket, isSelected, isActive, onClick, onSelect }: TicketCardProps) {
-  const isOverdue = ticket.slaDueAt && new Date(ticket.slaDueAt) < new Date();
+  const queryClient = useQueryClient();
+  const isOverdue = useMemo(
+    () => ticket.slaDueAt && new Date(ticket.slaDueAt) < new Date(),
+    [ticket.slaDueAt]
+  );
   const PriorityIcon = priorityIcons[ticket.priority];
+  
+  const prefetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Prefetch ticket details on hover for faster loading
+  const handleMouseEnter = useCallback(() => {
+    // Clear any existing timeout
+    if (prefetchTimeoutRef.current) {
+      clearTimeout(prefetchTimeoutRef.current);
+    }
+    
+    // Debounce prefetch to avoid too many requests
+    prefetchTimeoutRef.current = setTimeout(() => {
+      prefetchTicket(ticket.id, queryClient).catch(() => {
+        // Silently fail - prefetch is optional
+      });
+    }, 300); // Wait 300ms before prefetching
+  }, [ticket.id, queryClient]);
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (prefetchTimeoutRef.current) {
+        clearTimeout(prefetchTimeoutRef.current);
+      }
+    };
+  }, []);
+  
+  // Memoize formatted dates
+  const formattedCreatedDate = useMemo(
+    () => new Date(ticket.createdAt).toLocaleDateString('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }),
+    [ticket.createdAt]
+  );
+  
+  const formattedUpdatedDate = useMemo(
+    () => new Date(ticket.updatedAt).toLocaleDateString('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+    [ticket.updatedAt]
+  );
 
   return (
     <motion.div
@@ -70,6 +122,7 @@ export const TicketCard = memo(function TicketCard({ ticket, isSelected, isActiv
           priorityGlows[ticket.priority]
         )}
         onClick={onClick}
+        onMouseEnter={handleMouseEnter}
       >
         <div className="flex items-start gap-3">
           {/* Checkbox */}
@@ -159,12 +212,7 @@ export const TicketCard = memo(function TicketCard({ ticket, isSelected, isActiv
               <div className="flex items-center gap-1">
                 <Clock className="h-3 w-3" />
                 <span>
-                  {new Date(ticket.updatedAt).toLocaleDateString('de-DE', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  {formattedUpdatedDate}
                 </span>
               </div>
               {isOverdue && (

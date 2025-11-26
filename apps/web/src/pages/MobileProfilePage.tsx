@@ -12,6 +12,10 @@ import { useBotCommandHandler } from "../utils/botCommandHandler";
 import { springConfigs } from "../utils/springConfigs";
 import { cn } from "../utils/cn";
 import { TabNavigation } from "../components/profile/TabNavigation";
+import { ProfileHeader } from "../components/profile/ProfileHeader";
+import { StatsDashboard } from "../components/profile/StatsDashboard";
+import { ActivityTimeline } from "../components/profile/ActivityTimeline";
+import { OverviewDashboard } from "../components/profile/OverviewDashboard";
 
 export const MobileProfilePage = () => {
   const { profile, isLoading: isProfileLoading, updateProfile, isUpdating } = useProfile();
@@ -183,32 +187,6 @@ export const MobileProfilePage = () => {
     setActiveSubTab(subTabMapping[tab]);
   };
 
-  const insights = [
-    {
-      id: 'win-rate',
-      title: 'Drop Master',
-      description: 'Deine Gewinnrate liegt bei 29.2% - über dem Durchschnitt!',
-      icon: <Trophy className="w-6 h-6 text-green-400" />,
-      gradient: 'from-green-500/20 to-emerald-500/20',
-      borderColor: 'border-green-500/30'
-    },
-    {
-      id: 'daily-earnings',
-      title: 'Täglicher Durchschnitt',
-      description: 'Du verdienst ca. 0 Coins pro Tag',
-      icon: <Star className="w-6 h-6 text-blue-400" />,
-      gradient: 'from-blue-500/20 to-cyan-500/20',
-      borderColor: 'border-blue-500/30'
-    },
-    {
-      id: 'community',
-      title: 'Insider Star',
-      description: '184 Interaktionen in den letzten 30 Tagen',
-      icon: <Heart className="w-6 h-6 text-pink-400" />,
-      gradient: 'from-pink-500/20 to-rose-500/20',
-      borderColor: 'border-pink-500/30'
-    }
-  ];
 
   if (isProfileLoading) {
     return (
@@ -247,64 +225,12 @@ export const MobileProfilePage = () => {
       {/* Main Content */}
       <div className="pb-20">
         {/* Profile Header */}
-        <motion.div
-          className="p-6"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={springConfigs.smooth}
-        >
-          <div className="flex items-center gap-4 mb-6">
-            <motion.div
-              className="w-20 h-20 rounded-full bg-gradient-to-br from-accent to-cyan-400 flex items-center justify-center text-2xl font-bold text-black"
-              whileHover={{ scale: 1.05 }}
-              transition={springConfigs.gentle}
-            >
-              {profile?.name?.charAt(0) || 'U'}
-            </motion.div>
-            <div className="flex-1">
-              <h2 className="text-2xl font-bold mb-1">{profile?.name || 'Unbekannter User'}</h2>
-              <p className="text-gray-400 text-sm">@{profile?.username || 'username'}</p>
-              <div className="flex items-center gap-4 mt-2">
-                <div className="flex items-center gap-1">
-                  <Star className="w-4 h-4 text-yellow-400" />
-                  <span className="text-sm font-medium">{coinsBalance} Coins</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Trophy className="w-4 h-4 text-purple-400" />
-                  <span className="text-sm font-medium">VIP Tier 1</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Stats */}
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            <motion.div
-              className="bg-white/5 rounded-2xl p-4 text-center border border-white/10"
-              whileHover={{ scale: 1.02 }}
-              transition={springConfigs.gentle}
-            >
-              <div className="text-2xl font-bold text-accent">{drops?.length || 0}</div>
-              <div className="text-xs text-gray-400">Drops</div>
-            </motion.div>
-            <motion.div
-              className="bg-white/5 rounded-2xl p-4 text-center border border-white/10"
-              whileHover={{ scale: 1.02 }}
-              transition={springConfigs.gentle}
-            >
-              <div className="text-2xl font-bold text-green-400">{achievements?.length || 0}</div>
-              <div className="text-xs text-gray-400">Achievements</div>
-            </motion.div>
-            <motion.div
-              className="bg-white/5 rounded-2xl p-4 text-center border border-white/10"
-              whileHover={{ scale: 1.02 }}
-              transition={springConfigs.gentle}
-            >
-              <div className="text-2xl font-bold text-blue-400">{invite?.referrals || 0}</div>
-              <div className="text-xs text-gray-400">Referrals</div>
-            </motion.div>
-          </div>
-        </motion.div>
+        <ProfileHeader
+          onSettingsClick={() => {
+            triggerHaptic('light');
+            // TODO: Open settings modal
+          }}
+        />
 
         {/* New Hierarchical Tab Navigation */}
         <div className="px-4 mb-6">
@@ -327,65 +253,7 @@ export const MobileProfilePage = () => {
           transition={springConfigs.smooth}
         >
           {activeTab === 'overview' && (
-            <div className="space-y-6">
-              {/* Deine Insights */}
-              <div>
-                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                  <Star className="w-5 h-5 text-accent" />
-                  Deine Insights
-                </h3>
-                <div className="space-y-4">
-                  {insights.map((insight, index) => (
-                    <motion.div
-                      key={insight.id}
-                      className={cn(
-                        "p-4 rounded-2xl border",
-                        insight.gradient,
-                        insight.borderColor
-                      )}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                    >
-                      <div className="flex items-start gap-3">
-                        {insight.icon}
-                        <div>
-                          <h4 className="font-semibold text-white mb-1">{insight.title}</h4>
-                          <p className="text-sm text-gray-300">{insight.description}</p>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Recent Activity */}
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Letzte Aktivität</h3>
-                <div className="space-y-3">
-                  {[
-                    { action: 'Drop gewonnen', item: 'Nebula Vape Pro', time: '2h ago' },
-                    { action: 'Coins verdient', item: '+50 Coins', time: '5h ago' },
-                    { action: 'Achievement freigeschaltet', item: 'Drop Master', time: '1d ago' }
-                  ].map((activity, index) => (
-                    <motion.div
-                      key={index}
-                      className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/10"
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                    >
-                      <div className="w-2 h-2 bg-accent rounded-full" />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{activity.action}</p>
-                        <p className="text-xs text-gray-400">{activity.item}</p>
-                      </div>
-                      <span className="text-xs text-gray-500">{activity.time}</span>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <OverviewDashboard />
           )}
 
           {activeTab === 'orders' && (
@@ -425,39 +293,11 @@ export const MobileProfilePage = () => {
           )}
 
           {activeTab === 'stats' && (
-            <div className={cn(
-              "text-center",
-              "py-12 sm:py-16 md:py-20",
-              "px-4"
-            )}>
-              <BarChart3 className={cn(
-                "text-gray-400 mx-auto mb-4",
-                "w-12 h-12 sm:w-16 sm:h-16"
-              )} />
-              <h3 className={cn(
-                "font-semibold text-gray-300 mb-2",
-                "text-lg sm:text-xl"
-              )}>Statistiken</h3>
-              <p className="text-gray-400 text-sm sm:text-base">Detaillierte Statistiken zu deinem Profil</p>
-            </div>
+            <StatsDashboard />
           )}
 
           {activeTab === 'activity' && (
-            <div className={cn(
-              "text-center",
-              "py-12 sm:py-16 md:py-20",
-              "px-4"
-            )}>
-              <Activity className={cn(
-                "text-gray-400 mx-auto mb-4",
-                "w-12 h-12 sm:w-16 sm:h-16"
-              )} />
-              <h3 className={cn(
-                "font-semibold text-gray-300 mb-2",
-                "text-lg sm:text-xl"
-              )}>Aktivität</h3>
-              <p className="text-gray-400 text-sm sm:text-base">Deine Aktivitätsübersicht</p>
-            </div>
+            <ActivityTimeline />
           )}
 
           {activeTab === 'achievements' && (

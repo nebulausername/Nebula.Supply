@@ -1,11 +1,13 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
-import { useDrops } from '../../lib/api/hooks';
-import { Clock, Flame, MoveRight, Power, Sparkles, TimerReset } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
+import { useDrops, useUpdateDrop } from '../../lib/api/hooks';
+import { Clock, Flame, MoveRight, Power, Sparkles, TimerReset, Calendar, Repeat, AlertTriangle } from 'lucide-react';
 import { cn } from '../../utils/cn';
+import { motion } from 'framer-motion';
 
 interface ScheduledDrop {
   id: string;
@@ -72,6 +74,9 @@ export const DropScheduler: React.FC = () => {
   const [now, setNow] = useState(Date.now());
   const [range, setRange] = useState<'7d' | '30d'>('7d');
   const [autoActivation, setAutoActivation] = useState<Record<string, boolean>>({});
+  const [viewMode, setViewMode] = useState<'timeline' | 'calendar'>('timeline');
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const updateDropMutation = useUpdateDrop();
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 60 * 1000);
@@ -119,6 +124,59 @@ export const DropScheduler: React.FC = () => {
       }));
   }, [filteredDrops]);
 
+  // Detect conflicts
+  const conflicts = useMemo(() => {
+    const conflictsList: Array<{ drop1: ScheduledDrop; drop2: ScheduledDrop }> = [];
+    for (let i = 0; i < filteredDrops.length; i++) {
+      for (let j = i + 1; j < filteredDrops.length; j++) {
+        const drop1 = filteredDrops[i];
+        const drop2 = filteredDrops[j];
+        // Check if time ranges overlap
+        if (
+          (drop1.start <= drop2.start && drop2.start < drop1.end) ||
+          (drop2.start <= drop1.start && drop1.start < drop2.end)
+        ) {
+          conflictsList.push({ drop1, drop2 });
+        }
+      }
+    }
+    return conflictsList;
+  }, [filteredDrops]);
+
+  // Calendar view helper
+  const getDaysInMonth = useCallback((date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+    return { daysInMonth, startingDayOfWeek };
+  }, []);
+
+  const calendarDays = useMemo(() => {
+    const { daysInMonth, startingDayOfWeek } = getDaysInMonth(selectedDate);
+    const days = [];
+    // Add empty cells for days before month starts
+    for (let i = 0; i < startingDayOfWeek; i++) {
+      days.push(null);
+    }
+    // Add days of month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), day);
+      const dropsOnDay = filteredDrops.filter(
+        drop => {
+          const dropDate = new Date(drop.start);
+          return dropDate.getDate() === day && 
+                 dropDate.getMonth() === selectedDate.getMonth() &&
+                 dropDate.getFullYear() === selectedDate.getFullYear();
+        }
+      );
+      days.push({ day, date, drops: dropsOnDay });
+    }
+    return days;
+  }, [selectedDate, filteredDrops, getDaysInMonth]);
+
   return (
     <Card className="p-6 border border-white/10 bg-slate-950/40 backdrop-blur">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
@@ -129,6 +187,23 @@ export const DropScheduler: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <div className="flex gap-2">
+            <Button
+              variant={viewMode === 'timeline' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewMode('timeline')}
+            >
+              Timeline
+            </Button>
+            <Button
+              variant={viewMode === 'calendar' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewMode('calendar')}
+            >
+              <Calendar className="w-4 h-4 mr-1" />
+              Kalender
+            </Button>
+          </div>
           <Select value={range} onValueChange={(value: '7d' | '30d') => setRange(value)}>
             <SelectTrigger className="w-32">
               <SelectValue placeholder="Range" />
@@ -143,6 +218,93 @@ export const DropScheduler: React.FC = () => {
           </Badge>
         </div>
       </div>
+
+      {/* Conflict Warning */}
+      {conflicts.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-4 p-3 bg-orange-500/20 border border-orange-500/50 rounded-lg flex items-center gap-2"
+        >
+          <AlertTriangle className="w-5 h-5 text-orange-400" />
+          <span className="text-sm text-orange-300">
+            {conflicts.length} Konflikt{conflicts.length !== 1 ? 'e' : ''} erkannt - Überlappende Zeitfenster
+          </span>
+        </motion.div>
+      )}
+
+      {/* Calendar View */}
+      {viewMode === 'calendar' && (
+        <Card className="p-4 mb-6 bg-black/25 border-white/10">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-lg font-semibold">
+              {selectedDate.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}
+            </h4>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const newDate = new Date(selectedDate);
+                  newDate.setMonth(newDate.getMonth() - 1);
+                  setSelectedDate(newDate);
+                }}
+              >
+                ←
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setSelectedDate(new Date())}
+              >
+                Heute
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const newDate = new Date(selectedDate);
+                  newDate.setMonth(newDate.getMonth() + 1);
+                  setSelectedDate(newDate);
+                }}
+              >
+                →
+              </Button>
+            </div>
+          </div>
+          <div className="grid grid-cols-7 gap-2">
+            {['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'].map(day => (
+              <div key={day} className="text-center text-sm font-semibold text-muted-foreground py-2">
+                {day}
+              </div>
+            ))}
+            {calendarDays.map((dayData, index) => (
+              <div
+                key={index}
+                className={cn(
+                  "min-h-[80px] p-2 border border-white/10 rounded",
+                  dayData && dayData.drops.length > 0 && "bg-purple-500/10 border-purple-500/30"
+                )}
+              >
+                {dayData && (
+                  <>
+                    <div className="text-sm font-medium mb-1">{dayData.day}</div>
+                    {dayData.drops.map(drop => (
+                      <div
+                        key={drop.id}
+                        className="text-xs bg-purple-500/20 rounded px-1 py-0.5 mb-1 truncate"
+                        title={drop.name}
+                      >
+                        {drop.name}
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <div className="relative border border-white/10 rounded-xl bg-gradient-to-br from-blue-900/20 to-purple-900/20 px-4 py-6">
         <div className="absolute left-8 right-8 top-4 flex justify-between text-[11px] text-muted-foreground uppercase tracking-wide">

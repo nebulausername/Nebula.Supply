@@ -3,11 +3,21 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { LayoutGrid, List, Calendar, Filter, X, Bell, RefreshCw, Menu, Ticket as TicketIcon } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
+import { lazy, Suspense } from 'react';
 import { TicketListView } from './TicketListView';
-import { TicketKanbanBoard } from './TicketKanbanBoard';
 import { TicketFilters } from './TicketFilters';
-import { TicketStats } from './TicketStats';
-import { TicketDetailPanel } from './TicketDetailPanel';
+import { TicketLoadingSkeleton } from './TicketLoadingSkeleton';
+
+// Lazy load heavy components for code splitting
+const TicketKanbanBoard = lazy(() => 
+  import('./TicketKanbanBoard').then(module => ({ default: module.TicketKanbanBoard }))
+);
+const TicketStats = lazy(() => 
+  import('./TicketStats').then(module => ({ default: module.TicketStats }))
+);
+const TicketDetailModal = lazy(() => 
+  import('./TicketDetailModal').then(module => ({ default: module.TicketDetailModal }))
+);
 import { BulkActionsBar } from './BulkActionsBar';
 import { CreateTicketModal } from '../modals/CreateTicketModal';
 import { MobileTicketSheet } from './MobileTicketSheet';
@@ -15,6 +25,7 @@ import { FilterChips } from './FilterChips';
 import { QuickFilters } from './QuickFilters';
 import { TicketNotificationCenter } from './TicketNotificationCenter';
 import { TicketShortcutsHelp } from './TicketShortcutsHelp';
+import { SavedFiltersMenu } from './SavedFiltersMenu';
 import { useTicketNotifications } from '../../hooks/useTicketNotifications';
 import { useTickets, useTicketStats, queryKeys } from '../../lib/api/hooks';
 import { useRealtimeTickets } from '../../lib/realtime/hooks/useRealtimeTickets';
@@ -26,7 +37,26 @@ import { usePerformanceMonitor } from '../../lib/hooks/usePerformanceMonitor';
 import { useMobile } from '../../hooks/useMobile';
 import { useToast } from '../ui/Toast';
 import type { TicketViewMode, TicketFilters as TicketFiltersType } from './types';
-import type { Ticket } from '@nebula/shared/types';
+// Import Ticket type - fallback if @nebula/shared/types not available
+type Ticket = {
+  id: string;
+  subject: string;
+  summary?: string;
+  status: 'open' | 'waiting' | 'in_progress' | 'escalated' | 'done';
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  category?: string;
+  tags?: string[];
+  assignedAgent?: string;
+  createdAt: string;
+  updatedAt: string;
+  slaDueAt?: string;
+  telegramUserHash?: string;
+  userId?: string;
+  telegramUserId?: string;
+  channel?: string;
+  messages?: any[];
+  unreadCount?: number;
+};
 import { cn } from '../../utils/cn';
 
 export const TicketManagement = memo(function TicketManagement() {
@@ -36,9 +66,6 @@ export const TicketManagement = memo(function TicketManagement() {
   const { isMobile, isTablet } = useMobile();
   const toast = useToast();
   
-  // Enhanced keyboard shortcuts with 'g' prefix support
-  const [gKeyPressed, setGKeyPressed] = useState(false);
-
   const [viewMode, setViewMode] = useState<TicketViewMode>('list');
   const [filters, setFilters] = useState<TicketFiltersType>({});
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
@@ -111,12 +138,15 @@ export const TicketManagement = memo(function TicketManagement() {
     }
     
     // Handle nested data structure
-    if (ticketsResponse.data?.data && Array.isArray(ticketsResponse.data.data)) {
-      return ticketsResponse.data.data;
+    if ('data' in ticketsResponse && ticketsResponse.data && typeof ticketsResponse.data === 'object' && 'data' in ticketsResponse.data) {
+      const nestedData = (ticketsResponse.data as any).data;
+      if (Array.isArray(nestedData)) {
+        return nestedData;
+      }
     }
     
     // Try to extract from success response
-    if (ticketsResponse.success && ticketsResponse.data && Array.isArray(ticketsResponse.data)) {
+    if ('success' in ticketsResponse && ticketsResponse.success && 'data' in ticketsResponse && Array.isArray(ticketsResponse.data)) {
       return ticketsResponse.data;
     }
     
@@ -170,13 +200,10 @@ export const TicketManagement = memo(function TicketManagement() {
           ticket: {
             id: event.ticketId,
             subject: subject,
-            summary: ticket.summary || '',
             priority: ticket.priority || 'medium',
             status: ticket.status || 'open',
             category: ticket.category || 'other',
             telegramUserId: ticket.telegramUserId,
-            userId: ticket.userId,
-            channel: ticket.channel || 'web',
           },
         });
         
@@ -362,7 +389,7 @@ export const TicketManagement = memo(function TicketManagement() {
 
   const handleBulkSelectAll = useCallback((selected: boolean) => {
     if (selected) {
-      setSelectedTicketIds(new Set(filteredTickets.map(t => t.id)));
+      setSelectedTicketIds(new Set(filteredTickets.map((t: Ticket) => t.id)));
     } else {
       setSelectedTicketIds(new Set());
     }
@@ -441,6 +468,11 @@ export const TicketManagement = memo(function TicketManagement() {
   const handleClearAllFilters = useCallback(() => {
     setFilters({});
     setActivePreset('all');
+  }, []);
+
+  const handleLoadSavedFilter = useCallback((loadedFilters: TicketFiltersType) => {
+    setFilters(loadedFilters);
+    setActivePreset('custom');
   }, []);
 
   // Enhanced keyboard shortcuts with 'g' prefix support
@@ -523,10 +555,10 @@ export const TicketManagement = memo(function TicketManagement() {
       // 'j' - next ticket
       if (e.key === 'j' && !e.metaKey && !e.ctrlKey && filteredTickets.length > 0) {
         const currentIndex = selectedTicketId
-          ? filteredTickets.findIndex(t => t.id === selectedTicketId)
+          ? filteredTickets.findIndex((t: Ticket) => t.id === selectedTicketId)
           : -1;
         const nextIndex = currentIndex < filteredTickets.length - 1 ? currentIndex + 1 : 0;
-        handleTicketClick(filteredTickets[nextIndex].id);
+        handleTicketClick(filteredTickets[nextIndex]?.id || '');
         e.preventDefault();
         return;
       }
@@ -534,10 +566,10 @@ export const TicketManagement = memo(function TicketManagement() {
       // 'k' - previous ticket
       if (e.key === 'k' && !e.metaKey && !e.ctrlKey && filteredTickets.length > 0) {
         const currentIndex = selectedTicketId
-          ? filteredTickets.findIndex(t => t.id === selectedTicketId)
+          ? filteredTickets.findIndex((t: Ticket) => t.id === selectedTicketId)
           : -1;
         const prevIndex = currentIndex > 0 ? currentIndex - 1 : filteredTickets.length - 1;
-        handleTicketClick(filteredTickets[prevIndex].id);
+        handleTicketClick(filteredTickets[prevIndex]?.id || '');
         e.preventDefault();
         return;
       }
@@ -620,13 +652,24 @@ export const TicketManagement = memo(function TicketManagement() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const handleCreateTicketSuccess = useCallback(() => {
+  const handleCreateTicketSuccess = useCallback((ticketId?: string) => {
     setIsCreateTicketModalOpen(false);
-    // Refetch tickets to show the new one
-    refetch();
-    toast.success('Ticket created', 'The ticket has been created successfully');
-    logger.info('Ticket created successfully via shortcut');
-  }, [refetch, toast]);
+    
+    // If we have a ticket ID, open it immediately
+    if (ticketId) {
+      // Wait a bit for the ticket to be available in the API
+      setTimeout(() => {
+        handleTicketClick(ticketId);
+        toast.success('Ticket erstellt! 🎉', 'Das Ticket wurde erfolgreich erstellt und geöffnet');
+        logger.info('Ticket created and opened', { ticketId });
+      }, 500);
+    } else {
+      // Refetch tickets to show the new one
+      refetch();
+      toast.success('Ticket erstellt! 🎉', 'Das Ticket wurde erfolgreich erstellt');
+      logger.info('Ticket created successfully');
+    }
+  }, [refetch, toast, handleTicketClick]);
 
   return (
     <div className="flex flex-col h-full gap-4">
@@ -764,6 +807,12 @@ export const TicketManagement = memo(function TicketManagement() {
             </Button>
           </div>
 
+          {/* Saved Filters Menu */}
+          <SavedFiltersMenu
+            currentFilters={filters}
+            onLoadFilter={handleLoadSavedFilter}
+          />
+
           {/* Filter Toggle */}
           <Button
             variant={showFilters ? 'default' : 'outline'}
@@ -842,15 +891,18 @@ export const TicketManagement = memo(function TicketManagement() {
       />
 
       {/* Stats Bar - Enhanced */}
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {showStats && stats && (
           <motion.div
+            key="stats"
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.3 }}
           >
-            <TicketStats stats={stats?.data} />
+            <Suspense fallback={<TicketLoadingSkeleton count={1} variant="card" />}>
+              <TicketStats stats={stats && typeof stats === 'object' && 'data' in stats ? (stats as any).data : (stats as any)} />
+            </Suspense>
           </motion.div>
         )}
       </AnimatePresence>
@@ -954,11 +1006,13 @@ export const TicketManagement = memo(function TicketManagement() {
           )}
 
           {viewMode === 'kanban' && (
-            <TicketKanbanBoard
-              tickets={filteredTickets}
-              isLoading={isLoading}
-              onTicketClick={handleTicketClick}
-            />
+            <Suspense fallback={<TicketLoadingSkeleton count={5} variant="card" />}>
+              <TicketKanbanBoard
+                tickets={filteredTickets}
+                isLoading={isLoading}
+                onTicketClick={handleTicketClick}
+              />
+            </Suspense>
           )}
 
           {viewMode === 'calendar' && (
@@ -976,13 +1030,15 @@ export const TicketManagement = memo(function TicketManagement() {
           onSuccess={handleCreateTicketSuccess}
         />
 
-        {/* Ticket Detail Panel */}
+        {/* Ticket Detail Modal */}
         <AnimatePresence>
           {selectedTicketId && (
-            <TicketDetailPanel
-              ticketId={selectedTicketId}
-              onClose={handleTicketClose}
-            />
+            <Suspense fallback={null}>
+              <TicketDetailModal
+                ticketId={selectedTicketId}
+                onClose={handleTicketClose}
+              />
+            </Suspense>
           )}
         </AnimatePresence>
       </div>

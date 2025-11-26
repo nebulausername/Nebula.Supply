@@ -48,33 +48,138 @@ export function useRealtimeTickets(options: UseRealtimeTicketsOptions = {}) {
 
     switch (event.type) {
       case 'ticket:created':
-        queryClient.invalidateQueries({ queryKey: queryKeys.tickets?.list() || ['tickets'] });
+        // Optimistic update: Add ticket to list immediately
+        if (event.ticket) {
+          queryClient.setQueriesData(
+            { queryKey: queryKeys.tickets?.list() || ['tickets'] },
+            (old: any) => {
+              if (!old?.data) return old;
+              // Check if ticket already exists to avoid duplicates
+              const exists = old.data.some((t: any) => t.id === event.ticketId);
+              if (exists) return old;
+              return {
+                ...old,
+                data: [event.ticket, ...old.data]
+              };
+            }
+          );
+        } else {
+          // Fallback to invalidation if no ticket data
+          queryClient.invalidateQueries({ queryKey: queryKeys.tickets?.list() || ['tickets'] });
+        }
         optionsRef.current.onCreated?.(event);
         break;
       case 'ticket:updated':
-        queryClient.invalidateQueries({ queryKey: queryKeys.tickets?.list() || ['tickets'] });
-        if (event.ticketId) {
-          queryClient.invalidateQueries({ queryKey: ['tickets', event.ticketId] });
+        // Optimistic update: Update ticket in cache immediately
+        if (event.ticket) {
+          // Update detail query
+          queryClient.setQueryData(
+            queryKeys.tickets?.detail(event.ticketId) || ['tickets', event.ticketId],
+            event.ticket
+          );
+          // Update list query
+          queryClient.setQueriesData(
+            { queryKey: queryKeys.tickets?.list() || ['tickets'] },
+            (old: any) => {
+              if (!old?.data) return old;
+              return {
+                ...old,
+                data: old.data.map((t: any) =>
+                  t.id === event.ticketId ? { ...t, ...event.ticket } : t
+                )
+              };
+            }
+          );
+        } else {
+          // Fallback to invalidation
+          queryClient.invalidateQueries({ queryKey: queryKeys.tickets?.list() || ['tickets'] });
+          if (event.ticketId) {
+            queryClient.invalidateQueries({ queryKey: queryKeys.tickets?.detail(event.ticketId) || ['tickets', event.ticketId] });
+          }
         }
         optionsRef.current.onUpdated?.(event);
         break;
       case 'ticket:status_changed':
-        queryClient.invalidateQueries({ queryKey: queryKeys.tickets?.list() || ['tickets'] });
+        // Optimistic update: Update status immediately
         if (event.ticketId) {
-          queryClient.invalidateQueries({ queryKey: ['tickets', event.ticketId] });
+          const detailKey = queryKeys.tickets?.detail(event.ticketId) || ['tickets', event.ticketId];
+          queryClient.setQueryData(detailKey, (old: any) => {
+            if (!old) return old;
+            return {
+              ...old,
+              status: event.newStatus,
+              updatedAt: event.timestamp
+            };
+          });
+          // Update in list
+          queryClient.setQueriesData(
+            { queryKey: queryKeys.tickets?.list() || ['tickets'] },
+            (old: any) => {
+              if (!old?.data) return old;
+              return {
+                ...old,
+                data: old.data.map((t: any) =>
+                  t.id === event.ticketId
+                    ? { ...t, status: event.newStatus, updatedAt: event.timestamp }
+                    : t
+                )
+              };
+            }
+          );
         }
         optionsRef.current.onStatusChanged?.(event);
         break;
       case 'ticket:assigned':
-        queryClient.invalidateQueries({ queryKey: queryKeys.tickets?.list() || ['tickets'] });
+        // Optimistic update: Update assignment immediately
         if (event.ticketId) {
-          queryClient.invalidateQueries({ queryKey: ['tickets', event.ticketId] });
+          const detailKey = queryKeys.tickets?.detail(event.ticketId) || ['tickets', event.ticketId];
+          queryClient.setQueryData(detailKey, (old: any) => {
+            if (!old) return old;
+            return {
+              ...old,
+              assignedAgent: event.assignedTo,
+              updatedAt: event.timestamp
+            };
+          });
+          // Update in list
+          queryClient.setQueriesData(
+            { queryKey: queryKeys.tickets?.list() || ['tickets'] },
+            (old: any) => {
+              if (!old?.data) return old;
+              return {
+                ...old,
+                data: old.data.map((t: any) =>
+                  t.id === event.ticketId
+                    ? { ...t, assignedAgent: event.assignedTo, updatedAt: event.timestamp }
+                    : t
+                )
+              };
+            }
+          );
         }
         optionsRef.current.onAssigned?.(event);
         break;
       case 'ticket:message_added':
-        if (event.ticketId) {
-          queryClient.invalidateQueries({ queryKey: ['tickets', event.ticketId, 'messages'] });
+        // Optimistic update: Add message to ticket immediately
+        if (event.ticketId && event.message) {
+          const detailKey = queryKeys.tickets?.detail(event.ticketId) || ['tickets', event.ticketId];
+          queryClient.setQueryData(detailKey, (old: any) => {
+            if (!old) return old;
+            const messages = old.messages || [];
+            // Check if message already exists
+            const exists = messages.some((m: any) => m.id === event.message?.id);
+            if (exists) return old;
+            return {
+              ...old,
+              messages: [...messages, event.message],
+              updatedAt: event.timestamp
+            };
+          });
+        } else {
+          // Fallback to invalidation
+          if (event.ticketId) {
+            queryClient.invalidateQueries({ queryKey: queryKeys.tickets?.detail(event.ticketId) || ['tickets', event.ticketId] });
+          }
         }
         optionsRef.current.onMessageAdded?.(event);
         break;

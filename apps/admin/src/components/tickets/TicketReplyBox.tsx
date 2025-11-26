@@ -98,6 +98,12 @@ export const TicketReplyBox = memo(function TicketReplyBox({ ticketId, onReplySe
       }
 
       logger.logUserAction('ticket_reply_sent', { ticketId });
+      
+      // Success animation with haptic feedback
+      if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate(50); // Short vibration for success
+      }
+      
       toast.success(
         isPrivate ? 'Internal note sent' : 'Reply sent',
         isPrivate ? 'The note was added to the ticket' : 'Your reply has been sent successfully'

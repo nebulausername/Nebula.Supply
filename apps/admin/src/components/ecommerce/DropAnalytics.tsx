@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
 import { 
   BarChart3, 
   TrendingUp, 
@@ -9,13 +10,29 @@ import {
   Users,
   Package,
   Target,
-  Zap
+  Zap,
+  Compare,
+  Download,
+  RefreshCw
 } from 'lucide-react';
 import { useDrops } from '../../lib/api/hooks';
+import { useRealtimeDrops } from '../../lib/websocket/useRealtimeDrops';
+import { motion } from 'framer-motion';
 
 export function DropAnalytics() {
-  const { data: dropsResponse, isLoading } = useDrops({ limit: 100 });
+  const { data: dropsResponse, isLoading, refetch } = useDrops({ limit: 100 });
   const drops = dropsResponse?.data || [];
+  const [selectedDropsForComparison, setSelectedDropsForComparison] = useState<Set<string>>(new Set());
+  const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
+
+  // Real-time updates
+  useRealtimeDrops({
+    enabled: true,
+    onProgressUpdated: (event) => {
+      // Analytics will update automatically via query invalidation
+      refetch();
+    },
+  });
 
   const analytics = useMemo(() => {
     if (!drops || drops.length === 0) {
@@ -201,16 +218,72 @@ export function DropAnalytics() {
 
       {/* Conversion Rates */}
       <Card className="p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <Target className="w-6 h-6 text-blue-400" />
-          <h3 className="text-xl font-semibold">Conversion Rates</h3>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Target className="w-6 h-6 text-blue-400" />
+            <h3 className="text-xl font-semibold">Conversion Rates</h3>
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              value={timeRange}
+              onChange={(e) => setTimeRange(e.target.value as any)}
+              className="px-3 py-1.5 bg-black/25 border border-white/20 rounded-lg text-sm"
+            >
+              <option value="7d">7 Tage</option>
+              <option value="30d">30 Tage</option>
+              <option value="90d">90 Tage</option>
+              <option value="all">Alle</option>
+            </select>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => refetch()}
+              className="border-blue-500/50 hover:bg-blue-500/20"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                const csv = [
+                  ['Drop Name', 'Conversion Rate', 'Revenue', 'Sold', 'Interest'].join(','),
+                  ...analytics.conversionRates.map((item: any) => {
+                    const drop = drops.find((d: any) => d.id === item.dropId);
+                    return [
+                      item.dropName,
+                      item.rate.toFixed(2),
+                      (drop?.revenue || 0).toLocaleString(),
+                      (drop?.soldCount || 0),
+                      (drop?.interestCount || 0)
+                    ].join(',');
+                  })
+                ].join('\n');
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `drop-analytics-${new Date().toISOString().split('T')[0]}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="border-green-500/50 hover:bg-green-500/20"
+            >
+              <Download className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
         <div className="space-y-3">
           {analytics.conversionRates
             .sort((a: any, b: any) => b.rate - a.rate)
             .slice(0, 10)
             .map((item: any) => (
-              <div key={item.dropId} className="flex items-center justify-between p-3 bg-black/25 rounded-lg">
+              <motion.div
+                key={item.dropId}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="flex items-center justify-between p-3 bg-black/25 rounded-lg hover:bg-black/35 transition-colors"
+              >
                 <span className="font-medium">{item.dropName}</span>
                 <div className="flex items-center gap-2">
                   {item.rate > analytics.averageConversionRate ? (
@@ -220,10 +293,61 @@ export function DropAnalytics() {
                   )}
                   <span className="font-semibold">{item.rate.toFixed(1)}%</span>
                 </div>
-              </div>
+              </motion.div>
             ))}
         </div>
       </Card>
+
+      {/* Drop Comparison */}
+      {selectedDropsForComparison.size > 0 && (
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <Compare className="w-6 h-6 text-purple-400" />
+              <h3 className="text-xl font-semibold">Drop Vergleich</h3>
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSelectedDropsForComparison(new Set())}
+            >
+              Schließen
+            </Button>
+          </div>
+          <div className="space-y-4">
+            {Array.from(selectedDropsForComparison).map(dropId => {
+              const drop = drops.find((d: any) => d.id === dropId);
+              if (!drop) return null;
+              const conversionRate = drop.interestCount > 0 
+                ? ((drop.soldCount || 0) / drop.interestCount) * 100 
+                : 0;
+              return (
+                <div key={dropId} className="p-4 bg-black/25 rounded-lg">
+                  <h4 className="font-semibold mb-2">{drop.name}</h4>
+                  <div className="grid grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Revenue:</span>
+                      <p className="font-semibold text-green-400">€{(drop.revenue || 0).toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Sold:</span>
+                      <p className="font-semibold">{drop.soldCount || 0}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Interest:</span>
+                      <p className="font-semibold text-blue-400">{drop.interestCount || 0}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Conversion:</span>
+                      <p className="font-semibold">{conversionRate.toFixed(1)}%</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

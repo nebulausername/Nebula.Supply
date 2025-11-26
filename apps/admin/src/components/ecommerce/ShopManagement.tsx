@@ -7,18 +7,14 @@ import {
   Package, 
   ShoppingBag, 
   Search, 
-  Filter,
   Grid3X3,
   List,
   BarChart3,
   TrendingUp,
-  RefreshCw,
-  Zap,
   Clock,
   CheckCircle,
   AlertCircle,
   Sparkles,
-  Upload,
   Loader2
 } from 'lucide-react';
 import { ProductManagement } from './ProductManagement';
@@ -27,7 +23,6 @@ import { InventoryManagement } from './InventoryManagement';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { CategoryHierarchyManager } from './CategoryHierarchyManager';
 import { AutoProductGenerator } from './AutoProductGenerator';
-import { CategoryEditor } from './CategoryEditor';
 import { useErrorHandler } from '../../lib/hooks/useErrorHandler';
 import { usePerformanceMonitor } from '../../lib/hooks/usePerformanceMonitor';
 import { useDebounce } from '../../lib/hooks/useDebounce';
@@ -40,15 +35,23 @@ import { ErrorCategory, ErrorSeverity } from '../../lib/error/ErrorManager';
 import { useProducts, useCategories, useDashboardMetrics, useLowStockItems } from '../../lib/api/shopHooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { ShippingConfigForm } from './ShippingConfigForm';
-import { Truck, Layers, CheckCircle2, AlertTriangle, Tag } from 'lucide-react';
+import { Truck, Layers, Tag } from 'lucide-react';
 import { useRealtimeShop } from '../../lib/realtime/hooks/useRealtimeShop';
 import { useAutoSync } from '../../lib/hooks/useAutoSync';
 import { useToast } from '../ui/Toast';
 import { setupSneakerHierarchy, type SetupProgress } from '../../lib/utils/mainCategoriesSetup';
 import { useCreateCategory } from '../../lib/api/shopHooks';
-import { CategoryBulkImporter } from './CategoryBulkImporter';
-import { extractBrands, calculateBrandStats, getBrandColor, filterProductsByBrands, type Brand } from '../../lib/utils/brandUtils';
+import { extractBrands, calculateBrandStats, type Brand } from '../../lib/utils/brandUtils';
 import { BrandManagement } from './BrandManagement';
+import { CategoryEditor } from './CategoryEditor';
+// New modular components
+import { ShopHeader } from './ShopHeader';
+import { ShopQuickActions } from './ShopQuickActions';
+import { ShopHierarchyStats } from './ShopHierarchyStats';
+import { ShopQuickStats } from './ShopQuickStats';
+import { ShopTopCategories } from './ShopTopCategories';
+import { ShopLowStockAlerts } from './ShopLowStockAlerts';
+import { ShopBrandOverview } from './ShopBrandOverview';
 
 // Lazy load heavy components for better performance - with error handling
 const ProductPerformanceLive = lazy(() => 
@@ -127,53 +130,7 @@ const CustomerInsightsLive = lazy(() =>
     })
 );
 
-// Memoized Quick Stats Card Component with loading state
-const QuickStatCard = memo(({ 
-  title, 
-  value, 
-  trend, 
-  icon: Icon, 
-  bgColor, 
-  borderColor, 
-  textColor,
-  isLoading = false
-}: {
-  title: string;
-  value: string | number;
-  trend?: { value: string; color: string; icon: React.ReactNode };
-  icon: React.ComponentType<{ className?: string }>;
-  bgColor: string;
-  borderColor: string;
-  textColor: string;
-  isLoading?: boolean;
-}) => (
-  <Card className={`p-6 ${bgColor} border ${borderColor} transition-transform hover:scale-105`}>
-    <div className="flex items-center justify-between">
-      <div className="flex-1">
-        <p className="text-sm font-medium text-muted-foreground">{title}</p>
-        {isLoading ? (
-          <div className="h-8 w-24 bg-gray-800/50 rounded animate-pulse mt-2" />
-        ) : (
-          <p className={`text-2xl font-bold ${textColor}`}>{value}</p>
-        )}
-      </div>
-      <Icon className={`w-8 h-8 ${textColor} opacity-60 ${isLoading ? 'animate-pulse' : ''}`} />
-    </div>
-    {trend && (
-      <div className="mt-2 flex items-center text-sm">
-        {isLoading ? (
-          <div className="h-4 w-20 bg-gray-800/50 rounded animate-pulse" />
-        ) : (
-          <>
-            {trend.icon}
-            <span className={trend.color}>{trend.value}</span>
-          </>
-        )}
-      </div>
-    )}
-  </Card>
-));
-QuickStatCard.displayName = 'QuickStatCard';
+// QuickStatCard moved to ShopQuickStats.tsx
 
 // Shop Shipping Config Tab Component
 function ShopShippingConfigTab() {
@@ -260,13 +217,35 @@ export const ShopManagement = memo(() => {
   // State management
   const [activeTab, setActiveTab] = useState<string>('products');
   
-  // Preload components on tab hover
+  // Preload components on tab hover - Enhanced with more components
   const preloadComponent = useCallback((componentName: string) => {
     // Preload lazy components when hovering over tabs
-    if (componentName === 'analytics') {
-      import('./AnalyticsDashboard').catch(() => {});
-    } else if (componentName === 'inventory') {
-      import('./InventoryManagement').catch(() => {});
+    switch (componentName) {
+      case 'analytics':
+        import('./AnalyticsDashboard').catch(() => {});
+        import('./SalesAnalyticsLive').catch(() => {});
+        import('./PredictiveAnalytics').catch(() => {});
+        break;
+      case 'inventory':
+        import('./InventoryManagement').catch(() => {});
+        import('./InventoryDashboardLive').catch(() => {});
+        import('./StockAutomation').catch(() => {});
+        break;
+      case 'categories':
+        import('./CategoryManagement').catch(() => {});
+        import('./CategoryOrganizer').catch(() => {});
+        import('./CategoryAnalyticsLive').catch(() => {});
+        break;
+      case 'hierarchy':
+        import('./CategoryHierarchyManager').catch(() => {});
+        import('./AutoProductGenerator').catch(() => {});
+        break;
+      case 'products':
+        import('./ProductPerformanceLive').catch(() => {});
+        import('./ProductStockLive').catch(() => {});
+        break;
+      default:
+        break;
     }
   }, []);
   
@@ -286,6 +265,10 @@ export const ShopManagement = memo(() => {
   const [showBulkImporter, setShowBulkImporter] = useState(false);
   const [selectedBrandIds, setSelectedBrandIds] = useState<string[]>([]);
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [categoryEditorOpen, setCategoryEditorOpen] = useState(false);
+  const [categoryEditorParentId, setCategoryEditorParentId] = useState<string | undefined>(undefined);
+  const [categoryEditorMode, setCategoryEditorMode] = useState<'create' | 'edit'>('create');
+  const [categoryToEdit, setCategoryToEdit] = useState<any>(undefined);
   
   const createCategoryMutation = useCreateCategory();
 
@@ -716,6 +699,54 @@ export const ShopManagement = memo(() => {
     logger.logUserAction('shop_search', { term, area: 'shop' });
   }, [startTransition]);
 
+  // Memoized handlers for category clicks
+  const handleCategoryClick = useCallback((categoryId: string) => {
+    setActiveTab('products');
+    // Could trigger category filter in ProductManagement
+  }, []);
+
+  // Memoized handlers for low stock item clicks
+  const handleLowStockItemClick = useCallback((itemId: string) => {
+    setActiveTab('products');
+    // Could focus on specific product
+  }, []);
+
+  // Memoized handlers for brand selection
+  const handleBrandSelect = useCallback((brandId: string) => {
+    setSelectedBrandIds([brandId]);
+    setActiveTab('products');
+  }, []);
+
+  // Memoized handlers for brand filter change
+  const handleBrandFilterChange = useCallback((brandIds: string[]) => {
+    setSelectedBrandIds(brandIds);
+  }, []);
+
+  // Handler for opening category editor modal
+  const handleAddSubcategory = useCallback((parentId: string) => {
+    setCategoryEditorParentId(parentId);
+    setCategoryEditorMode('create');
+    setCategoryToEdit(undefined);
+    setCategoryEditorOpen(true);
+  }, []);
+
+  // Handler for editing category
+  const handleEditCategory = useCallback((category: any) => {
+    setCategoryToEdit(category);
+    setCategoryEditorParentId(category?.parentId);
+    setCategoryEditorMode('edit');
+    setCategoryEditorOpen(true);
+  }, []);
+
+  // Handler for closing category editor
+  const handleCloseCategoryEditor = useCallback(() => {
+    setCategoryEditorOpen(false);
+    setCategoryEditorParentId(undefined);
+    setCategoryToEdit(undefined);
+    // Invalidate categories to refresh the list
+    queryClient.invalidateQueries({ queryKey: ['categories'] });
+  }, [queryClient]);
+
 
   const handleViewModeChange = useCallback((mode: 'grid' | 'list') => {
     setViewMode(mode);
@@ -725,573 +756,59 @@ export const ShopManagement = memo(() => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-neon via-blue-400 to-purple-400 bg-clip-text text-transparent">
-              Shop Management
-            </h1>
-            {/* Auto-sync Status */}
-            {isAutoSyncing && (
-              <Badge variant="outline" className="text-blue-400 border-blue-400 bg-blue-500/10 animate-pulse">
-                <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
-                Synchronisiere...
-              </Badge>
-            )}
-            {/* Real-time Connection Status */}
-            <div className="flex items-center gap-2">
-              {isRealtimeConnected ? (
-                <Badge variant="outline" className="text-green-400 border-green-400 bg-green-500/10">
-                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse mr-2"></div>
-                  Live
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="text-yellow-400 border-yellow-400 bg-yellow-500/10">
-                  <div className="w-2 h-2 bg-yellow-400 rounded-full mr-2"></div>
-                  Offline
-                </Badge>
-              )}
-            </div>
-          </div>
-          <p className="text-muted-foreground mt-2">
-            Verwalte deine Shop-Produkte, Kategorien, Lagerbestand und Analytics
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="min-w-32 hover:bg-white/5 transition-colors"
-            title="Daten aktualisieren (Ctrl+R)"
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-            {isRefreshing ? 'Aktualisiere...' : 'Aktualisieren'}
-          </Button>
-        </div>
-      </div>
+      <ShopHeader
+        isAutoSyncing={isAutoSyncing}
+        isRealtimeConnected={isRealtimeConnected}
+        isRefreshing={isRefreshing}
+        onRefresh={handleRefresh}
+      />
 
-      {/* Quick Actions für SNEAKER-Setup */}
-      <Card className="p-4 mb-6 bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Sparkles className="w-5 h-5 text-purple-400" />
-            <div>
-              <h3 className="text-sm font-semibold text-white">SNEAKER Hierarchie Quick-Actions</h3>
-              <p className="text-xs text-white/60">Schnelle Einrichtung der 3-Level SNEAKER Hierarchie</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowBulkImporter(!showBulkImporter)}
-              className="border-purple-500/30 hover:bg-purple-500/20"
-            >
-              <Upload className="w-4 h-4 mr-2" />
-              Bulk Import
-            </Button>
-            <Button
-              variant="default"
-              size="sm"
-              onClick={handleSetupSneakerHierarchy}
-              disabled={isSettingUpSneaker}
-              className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 border-purple-500/30 hover:from-purple-500/30 hover:to-pink-500/30"
-            >
-              {isSettingUpSneaker ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  {sneakerSetupProgress ? sneakerSetupProgress.label : 'Setup läuft...'}
-                </>
-              ) : (
-                <>
-                  <Zap className="w-4 h-4 mr-2" />
-                  SNEAKER Hierarchie erstellen
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      {/* Bulk Importer */}
-      {showBulkImporter && (
-        <div className="mb-6">
-          <CategoryBulkImporter
-            onComplete={() => {
-              queryClient.invalidateQueries({ queryKey: ['categories'] });
-              setShowBulkImporter(false);
-            }}
-          />
-        </div>
-      )}
+      {/* Quick Actions */}
+      <ShopQuickActions
+        showBulkImporter={showBulkImporter}
+        isSettingUpSneaker={isSettingUpSneaker}
+        sneakerSetupProgress={sneakerSetupProgress}
+        onToggleBulkImporter={() => setShowBulkImporter(!showBulkImporter)}
+        onSetupSneakerHierarchy={handleSetupSneakerHierarchy}
+        onBulkImportComplete={() => {
+          queryClient.invalidateQueries({ queryKey: ['categories'] });
+          setShowBulkImporter(false);
+        }}
+      />
 
       {/* Hierarchie-Statistiken */}
-      <Card className="p-6 mb-6 bg-gradient-to-br from-blue-900/20 to-purple-900/20 border border-blue-500/30">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Layers className="w-5 h-5 text-blue-400" />
-            <h2 className="text-xl font-semibold text-white">Hierarchie-Statistiken</h2>
-          </div>
-          <Badge 
-            variant="outline" 
-            className={cn(
-              hierarchyStats.completeness >= 80 ? 'text-green-400 border-green-400' :
-              hierarchyStats.completeness >= 50 ? 'text-yellow-400 border-yellow-400' :
-              'text-orange-400 border-orange-400'
-            )}
-          >
-            {hierarchyStats.completeness}% Vollständig
-          </Badge>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
-            <div className="text-2xl font-bold text-purple-400 mb-1">{hierarchyStats.level0}</div>
-            <div className="text-sm text-white/60">Hauptkategorien</div>
-            <div className="text-xs text-white/40 mt-1">Level 0</div>
-          </div>
-          <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-            <div className="text-2xl font-bold text-blue-400 mb-1">{hierarchyStats.level1}</div>
-            <div className="text-sm text-white/60">Marken</div>
-            <div className="text-xs text-white/40 mt-1">Level 1</div>
-          </div>
-          <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
-            <div className="text-2xl font-bold text-green-400 mb-1">{hierarchyStats.level2}</div>
-            <div className="text-sm text-white/60">Modelle</div>
-            <div className="text-xs text-white/40 mt-1">Level 2</div>
-          </div>
-          <div className="p-4 bg-orange-500/10 border border-orange-500/30 rounded-lg">
-            <div className="text-2xl font-bold text-orange-400 mb-1">{hierarchyStats.sneakerBrands}</div>
-            <div className="text-sm text-white/60">SNEAKER Marken</div>
-            <div className="text-xs text-white/40 mt-1">{hierarchyStats.sneakerModels} Modelle</div>
-          </div>
-        </div>
-        
-        {/* Mini Hierarchie-Visualisierung */}
-        <div className="mt-4 p-4 bg-black/25 rounded-lg border border-white/10">
-          <h3 className="text-sm font-semibold text-white mb-3">SNEAKER Hierarchie Status</h3>
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-purple-400" />
-              <span className="text-sm text-white/80">SNEAKER (Hauptkategorie)</span>
-              <Badge variant="outline" className="ml-auto text-xs">
-                {hierarchyStats.level0 > 0 ? (
-                  <CheckCircle2 className="w-3 h-3 mr-1 text-green-400" />
-                ) : (
-                  <AlertTriangle className="w-3 h-3 mr-1 text-orange-400" />
-                )}
-                {hierarchyStats.level0 > 0 ? 'Vorhanden' : 'Fehlt'}
-              </Badge>
-            </div>
-            <div className="ml-4 space-y-1">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-blue-400" />
-                <span className="text-sm text-white/60">Marken (Level 1)</span>
-                <Badge variant="outline" className="ml-auto text-xs">
-                  {hierarchyStats.sneakerBrands} / 6
-                </Badge>
-              </div>
-              <div className="ml-4 space-y-1">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-green-400" />
-                  <span className="text-sm text-white/40">Modelle (Level 2)</span>
-                  <Badge variant="outline" className="ml-auto text-xs">
-                    {hierarchyStats.sneakerModels} / 23
-                  </Badge>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Card>
+      <ShopHierarchyStats hierarchyStats={hierarchyStats} />
 
-      {/* Quick Stats - Real-time data with loading states */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <QuickStatCard
-          title="Shop Produkte"
-          value={quickStats.products.value}
-          trend={quickStats.products.trend}
-          icon={ShoppingBag}
-          bgColor="bg-blue-900/20"
-          borderColor="border-blue-500/30"
-          textColor="text-blue-400"
-          isLoading={quickStats.products.isLoading}
-        />
-        <QuickStatCard
-          title="Lagerbestand"
-          value={quickStats.inventory.value}
-          trend={quickStats.inventory.trend}
-          icon={Package}
-          bgColor="bg-orange-900/20"
-          borderColor="border-orange-500/30"
-          textColor="text-orange-400"
-          isLoading={quickStats.inventory.isLoading}
-        />
-        <QuickStatCard
-          title="Kategorien"
-          value={quickStats.categories.value}
-          trend={quickStats.categories.trend}
-          icon={Package}
-          bgColor="bg-green-900/20"
-          borderColor="border-green-500/30"
-          textColor="text-green-400"
-          isLoading={quickStats.categories.isLoading}
-        />
-        <QuickStatCard
-          title="Umsatz"
-          value={quickStats.revenue.value}
-          trend={quickStats.revenue.trend}
-          icon={BarChart3}
-          bgColor="bg-pink-900/20"
-          borderColor="border-pink-500/30"
-          textColor="text-pink-400"
-          isLoading={quickStats.revenue.isLoading}
-        />
-      </div>
+      {/* Quick Stats */}
+      <ShopQuickStats quickStats={quickStats} />
 
       {/* Top Categories & Low Stock Alerts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Top Categories */}
-        <Card className="p-6 bg-gradient-to-br from-blue-900/20 to-purple-900/20 border border-blue-500/30">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-blue-400" />
-              <h2 className="text-xl font-semibold text-white">Top Kategorien</h2>
-            </div>
-            <Badge variant="outline" className="text-blue-400 border-blue-400">
-              {categoriesArray.length || 0} Kategorien
-            </Badge>
-          </div>
-          {categoriesLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="h-12 bg-gray-800/50 rounded animate-pulse" />
-              ))}
-            </div>
-          ) : topCategories.length > 0 ? (
-            <div className="space-y-2">
-              {topCategories.map((category: any, index: number) => (
-                <div
-                  key={category.id}
-                  className="group flex items-center justify-between p-3 bg-black/25 rounded-lg border border-white/10 hover:border-blue-500/30 hover:bg-white/5 transition-all cursor-pointer"
-                  onClick={() => {
-                    // Navigate to products tab with category filter
-                    setActiveTab('products');
-                    // Could trigger category filter in ProductManagement
-                  }}
-                >
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <span className="text-2xl flex-shrink-0 group-hover:scale-110 transition-transform">{category.icon || '📦'}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-white truncate group-hover:text-blue-400 transition-colors">{category.name}</div>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <span>{category.productCount} Produkte</span>
-                        {category.avgPrice > 0 && (
-                          <>
-                            <span>•</span>
-                            <span className="text-green-400">Ø €{category.avgPrice.toFixed(2)}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-blue-400 border-blue-400 group-hover:bg-blue-500/20 transition-colors">
-                      #{index + 1}
-                    </Badge>
-                    <TrendingUp className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                </div>
-              ))}
-              {categoriesArray.length > 5 && (
-                <div className="text-center pt-2">
-                  <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-white">
-                    +{categoriesArray.length - 5} weitere Kategorien anzeigen
-                  </Button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              <Package className="w-12 h-12 mx-auto mb-2 opacity-30" />
-              <p>Keine Kategorien verfügbar</p>
-            </div>
-          )}
-        </Card>
-
-        {/* Low Stock Alerts */}
-        <Card className="p-6 bg-gradient-to-br from-orange-900/20 to-red-900/20 border border-orange-500/30">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-orange-400" />
-              <h2 className="text-xl font-semibold text-white">Low Stock Alerts</h2>
-            </div>
-            <Badge variant="outline" className={`${lowStockCount > 0 ? 'text-orange-400 border-orange-400' : 'text-green-400 border-green-400'}`}>
-              {lowStockCount} {lowStockCount === 1 ? 'Produkt' : 'Produkte'}
-            </Badge>
-          </div>
-          {lowStockLoading || metricsLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="h-12 bg-gray-800/50 rounded animate-pulse" />
-              ))}
-            </div>
-          ) : lowStockCount > 0 ? (
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {lowStockData?.slice(0, 10).map((item: any) => {
-                const stock = item.stock || item.inventory || 0;
-                const isCritical = stock <= 3;
-                return (
-                  <div
-                    key={item.id || item.productId}
-                    className={`group flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer ${
-                      isCritical 
-                        ? 'bg-red-500/10 border-red-500/30 hover:border-red-500/50' 
-                        : 'bg-black/25 border-orange-500/20 hover:border-orange-500/40'
-                    }`}
-                    onClick={() => {
-                      // Navigate to products tab and focus on this product
-                      setActiveTab('products');
-                    }}
-                  >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <Package className={`w-5 h-5 flex-shrink-0 ${isCritical ? 'text-red-400' : 'text-orange-400'}`} />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-white truncate group-hover:text-orange-400 transition-colors">
-                          {item.name || item.productName || 'Unbekannt'}
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <span>
-                            Lagerbestand: <span className={`font-semibold ${isCritical ? 'text-red-400' : 'text-orange-400'}`}>{stock}</span>
-                          </span>
-                          {item.sku && (
-                            <>
-                              <span>•</span>
-                              <span className="text-xs">SKU: {item.sku}</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <Badge 
-                      variant="outline" 
-                      className={`${isCritical ? 'text-red-400 border-red-400 bg-red-500/20' : 'text-orange-400 border-orange-400'} animate-pulse group-hover:animate-none transition-all`}
-                    >
-                      {isCritical ? 'Kritisch' : 'Niedrig'}
-                    </Badge>
-                  </div>
-                );
-              })}
-              {lowStockData && lowStockData.length > 10 && (
-                <div className="text-center pt-2">
-                  <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-orange-400">
-                    +{lowStockData.length - 10} weitere Low Stock Produkte
-                  </Button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              <CheckCircle className="w-12 h-12 mx-auto mb-2 text-green-400 opacity-50" />
-              <p className="text-green-400">Alle Produkte haben ausreichend Lagerbestand</p>
-            </div>
-          )}
-        </Card>
+        <ShopTopCategories
+          categories={topCategories}
+          totalCategories={categoriesArray.length}
+          isLoading={categoriesLoading}
+          onCategoryClick={handleCategoryClick}
+        />
+        <ShopLowStockAlerts
+          items={lowStockData || []}
+          count={lowStockCount}
+          isLoading={lowStockLoading || metricsLoading}
+          onItemClick={handleLowStockItemClick}
+        />
       </div>
 
-      {/* Brand Overview Section */}
+      {/* Brand Overview */}
       {brands.length > 0 && (
-        <Card className="p-6 bg-gradient-to-br from-purple-900/20 to-blue-900/20 border border-purple-500/30">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Tag className="w-5 h-5 text-purple-400" />
-              <h2 className="text-xl font-semibold text-white">Brand Overview</h2>
-            </div>
-            <Badge variant="outline" className="text-purple-400 border-purple-400">
-              {brands.length} Brands
-            </Badge>
-          </div>
-          
-          {/* Brand Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-            {brands.slice(0, 6).map((brand) => {
-              const stats = brandStatsMap.get(brand.id);
-              const colors = getBrandColor(brand.name);
-              
-              return (
-                <Card
-                  key={brand.id}
-                  className={`p-4 bg-gradient-to-br ${colors.primary} border ${colors.secondary} hover:border-${colors.accent}/50 transition-all cursor-pointer`}
-                  interactive
-                  onClick={() => {
-                    setSelectedBrandIds([brand.id]);
-                    setActiveTab('products');
-                  }}
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <h3 className={`text-lg font-bold ${colors.accent} mb-1`}>{brand.name}</h3>
-                      <p className="text-xs text-muted-foreground">{brand.models.length} Modelle</p>
-                    </div>
-                    <Badge variant="outline" className={colors.badge}>
-                      {brand.productCount} Produkte
-                    </Badge>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="bg-black/20 rounded p-2">
-                      <p className="text-xs text-muted-foreground">Umsatz</p>
-                      <p className={`text-sm font-bold ${colors.accent}`}>
-                        €{stats?.totalRevenue.toLocaleString() || '0'}
-                      </p>
-                    </div>
-                    <div className="bg-black/20 rounded p-2">
-                      <p className="text-xs text-muted-foreground">Ø Preis</p>
-                      <p className={`text-sm font-bold ${colors.accent}`}>
-                        €{stats?.averagePrice.toFixed(2) || '0.00'}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Package className={`w-4 h-4 ${colors.accent}`} />
-                      <span className="text-xs text-muted-foreground">Lager:</span>
-                      <span className={`text-xs font-semibold ${colors.accent}`}>
-                        {stats?.totalStock || 0}
-                      </span>
-                    </div>
-                    {stats && (stats.lowStockCount > 0 || stats.outOfStockCount > 0) && (
-                      <AlertCircle className={`w-4 h-4 ${colors.accent}`} />
-                    )}
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-
-          {/* Brand Statistics */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Top Brands by Revenue */}
-            <Card className="p-4 bg-black/25 border border-white/10">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-white">Top Brands nach Umsatz</h3>
-                <TrendingUp className="w-4 h-4 text-green-400" />
-              </div>
-              <div className="space-y-2">
-                {topBrandsByRevenue.slice(0, 5).map(({ brand, stats }, index) => {
-                  const colors = getBrandColor(brand.name);
-                  return (
-                    <div
-                      key={brand.id}
-                      className="flex items-center justify-between p-2 bg-black/20 rounded hover:bg-white/5 transition-colors cursor-pointer"
-                      onClick={() => {
-                        setSelectedBrandIds([brand.id]);
-                        setActiveTab('products');
-                      }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className={`text-xs ${colors.badge}`}>
-                          #{index + 1}
-                        </Badge>
-                        <span className="text-sm font-medium text-white">{brand.name}</span>
-                      </div>
-                      <span className={`text-sm font-bold ${colors.accent}`}>
-                        €{stats?.totalRevenue.toLocaleString() || '0'}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-
-            {/* Top Brands by Products */}
-            <Card className="p-4 bg-black/25 border border-white/10">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-white">Top Brands nach Produkten</h3>
-                <Package className="w-4 h-4 text-blue-400" />
-              </div>
-              <div className="space-y-2">
-                {topBrandsByProducts.slice(0, 5).map(({ brand, stats }, index) => {
-                  const colors = getBrandColor(brand.name);
-                  return (
-                    <div
-                      key={brand.id}
-                      className="flex items-center justify-between p-2 bg-black/20 rounded hover:bg-white/5 transition-colors cursor-pointer"
-                      onClick={() => {
-                        setSelectedBrandIds([brand.id]);
-                        setActiveTab('products');
-                      }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className={`text-xs ${colors.badge}`}>
-                          #{index + 1}
-                        </Badge>
-                        <span className="text-sm font-medium text-white">{brand.name}</span>
-                      </div>
-                      <span className={`text-sm font-bold ${colors.accent}`}>
-                        {stats?.totalProducts || 0} Produkte
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          </div>
-        </Card>
-      )}
-
-      {/* Brand Filter Section */}
-      {brands.length > 0 && (
-        <Card className="p-4 bg-gradient-to-r from-gray-900/50 to-black/50 border border-white/10">
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-muted-foreground" />
-              <label className="text-sm font-medium text-white">Brand Filter:</label>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Button
-                variant={selectedBrandIds.length === 0 ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSelectedBrandIds([])}
-              >
-                Alle Brands
-              </Button>
-              {brands.slice(0, 6).map(brand => {
-                const colors = getBrandColor(brand.name);
-                const isSelected = selectedBrandIds.includes(brand.id);
-                return (
-                  <Button
-                    key={brand.id}
-                    variant={isSelected ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => {
-                      if (isSelected) {
-                        setSelectedBrandIds(selectedBrandIds.filter(id => id !== brand.id));
-                      } else {
-                        setSelectedBrandIds([...selectedBrandIds, brand.id]);
-                      }
-                    }}
-                    className={isSelected ? `bg-gradient-to-r ${colors.primary} border ${colors.secondary}` : ''}
-                  >
-                    {brand.name}
-                    {isSelected && <CheckCircle className="w-3 h-3 ml-2" />}
-                  </Button>
-                );
-              })}
-            </div>
-            {selectedBrandIds.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSelectedBrandIds([])}
-                className="ml-auto"
-              >
-                Filter zurücksetzen
-              </Button>
-            )}
-          </div>
-        </Card>
+        <ShopBrandOverview
+          brands={brands}
+          brandStatsMap={brandStatsMap}
+          topBrandsByRevenue={topBrandsByRevenue}
+          topBrandsByProducts={topBrandsByProducts}
+          selectedBrandIds={selectedBrandIds}
+          onBrandSelect={handleBrandSelect}
+          onBrandFilterChange={handleBrandFilterChange}
+        />
       )}
 
       {/* Tabs Navigation - Enhanced */}
@@ -1637,9 +1154,7 @@ export const ShopManagement = memo(() => {
                     onCategorySelect={(categoryId) => {
                       handleTabChange('categories');
                     }}
-                    onAddSubcategory={(parentId) => {
-                      // TODO: Implement category editor modal
-                    }}
+                    onAddSubcategory={handleAddSubcategory}
                   />
                   <AutoProductGenerator 
                     onComplete={(products) => {
@@ -1801,6 +1316,15 @@ export const ShopManagement = memo(() => {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Category Editor Modal */}
+      <CategoryEditor
+        open={categoryEditorOpen}
+        onClose={handleCloseCategoryEditor}
+        category={categoryToEdit}
+        parentId={categoryEditorParentId}
+        mode={categoryEditorMode}
+      />
     </div>
   );
 });

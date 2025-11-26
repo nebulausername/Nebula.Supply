@@ -1477,110 +1477,212 @@ export const registerSimplifiedMenu = (bot: Telegraf<NebulaContext>) => {
     "default": "🤖 **KI-Support:**\n\n❓ **Ich verstehe deine Frage nicht ganz.**\n\n💡 **Häufige Fragen:**\n• 'was ist nebula'\n• 'wie funktioniert verifizierung'\n• 'wie bezahle ich'\n• 'wo sind meine tickets'\n• 'bot funktioniert nicht'\n\n🔍 **Oder nutze:**\n• `/start` - Bot neu starten\n• `/menu` - Hauptmenü\n\n💬 **Spezifische Frage?** Formuliere sie anders!"
   };
 
-  // Enhanced Text Handler with Quick Command Integration
+  // Enhanced Text Handler with Quick Command Integration & Catch-All Response
   bot.on("text", async (ctx, next) => {
-    const message = ctx.message.text.toLowerCase().trim();
-    
-    // Invite-Code Handler
-    if (ctx.session.awaitingInvite) {
-      const code = ctx.message.text.trim();
-      const isValid = code.startsWith("VIP") || code.length > 6;
+    try {
+      const message = ctx.message?.text?.toLowerCase().trim();
       
-      if (isValid) {
-        ctx.session.inviteCode = code;
-        ctx.session.onboardingStatus = "verified";
-        ctx.session.awaitingInvite = false;
-        
-        // Update navigation
-        navigationManager.pushScreen(ctx, 'invite_success', 'Invite Code Erfolg');
-        
+      // Safety check
+      if (!message) {
+        logger.warn("Received empty or invalid text message", { userId: ctx.from?.id });
         await ctx.reply(
-          "✅ **Invite-Code gültig!**\n\n" +
-          "🎉 **Willkommen im Nebula Club!**\n" +
-          "Du hast jetzt Zugang zu allen Features.\n\n" +
-          "🚀 **Was jetzt möglich ist:**\n" +
-          "• WebApp vollständig nutzen\n" +
-          "• Premium Tickets kaufen\n" +
-          "• Alle Zahlungsmethoden\n\n" +
-          `🔑 **Verwendeter Code:** ${code}`,
+          "❓ **Ich habe deine Nachricht nicht verstanden.**\n\n" +
+          "💡 **Versuche es mit:**\n" +
+          "• `/start` - Bot neu starten\n" +
+          "• `/menu` - Hauptmenü öffnen\n" +
+          "• Eine Frage stellen (z.B. 'was ist nebula?')",
           Markup.inlineKeyboard([
-            [Markup.button.webApp("🚀 Nebula öffnen", ctx.config.webAppUrl || "http://localhost:5173")],
-            [Markup.button.callback("🎯 Hauptmenü", "menu_back")]
+            [Markup.button.callback("🏠 Hauptmenü", "menu_back")],
+            [Markup.button.callback("❓ Hilfe", "simple_help")]
           ])
         );
-      } else {
-        ctx.session.inviteCode = undefined;
-        ctx.session.onboardingStatus = "unknown";
+        return;
+      }
+      
+      // Invite-Code Handler
+      if (ctx.session.awaitingInvite) {
+        const code = ctx.message.text.trim();
+        const isValid = code.startsWith("VIP") || code.length > 6;
+        
+        if (isValid) {
+          ctx.session.inviteCode = code;
+          ctx.session.onboardingStatus = "verified";
+          ctx.session.awaitingInvite = false;
+          
+          // Update navigation
+          navigationManager.pushScreen(ctx, 'invite_success', 'Invite Code Erfolg');
+          
+          await ctx.reply(
+            "✅ **Invite-Code gültig!**\n\n" +
+            "🎉 **Willkommen im Nebula Club!**\n" +
+            "Du hast jetzt Zugang zu allen Features.\n\n" +
+            "🚀 **Was jetzt möglich ist:**\n" +
+            "• WebApp vollständig nutzen\n" +
+            "• Premium Tickets kaufen\n" +
+            "• Alle Zahlungsmethoden\n\n" +
+            `🔑 **Verwendeter Code:** ${code}`,
+            Markup.inlineKeyboard([
+              [Markup.button.webApp("🚀 Nebula öffnen", ctx.config.webAppUrl || "http://localhost:5173")],
+              [Markup.button.callback("🎯 Hauptmenü", "menu_back")]
+            ])
+          );
+        } else {
+          ctx.session.inviteCode = undefined;
+          ctx.session.onboardingStatus = "unknown";
+          await ctx.reply(
+            "❌ **Invite-Code ungültig**\n\n" +
+            "Bitte prüfe deinen Code oder fordere einen neuen an.\n\n" +
+            "💡 **Gültige Codes:**\n" +
+            "• Beginnen mit 'VIP'\n" +
+            "• Haben 6+ Zeichen",
+            Markup.inlineKeyboard([
+              [Markup.button.callback("🔑 Neuen Code eingeben", "use_invite")],
+              [Markup.button.callback("🤳 Verifizierung verwenden", "start_verification")],
+              [Markup.button.callback("🔙 Zurück", "menu_back")]
+            ])
+          );
+        }
+        return;
+      }
+
+      // Try quick command handler first (optimized with timeout)
+      // This is fast and should handle most common commands
+      try {
+        const quickCommandHandled = await Promise.race([
+          quickCommandHandler.processText(ctx, message),
+          new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 1500)) // 1.5s timeout
+        ]);
+        
+        if (quickCommandHandled) {
+          logger.debug("Quick command handled", { userId: ctx.from?.id, message: message.substring(0, 30) });
+          return; // Quick command was handled
+        }
+      } catch (error) {
+        logger.warn("Quick command handler error (non-fatal)", { 
+          error: String(error),
+          userId: ctx.from?.id 
+        });
+        // Continue to other handlers - don't block on errors
+      }
+
+      // Check if other handlers should process first (support tickets, etc.)
+      // Only call next() if we're not in a special session state
+      const hasSpecialState = ctx.session.awaitingInvite || 
+                             ctx.session.awaitingVerification ||
+                             (ctx.session as any).awaitingTicketReply;
+      
+      // Give other handlers a chance to process first (but don't wait too long)
+      if (!hasSpecialState) {
+        try {
+          // Call next() to let other handlers process, but with a short timeout
+          await Promise.race([
+            next(),
+            new Promise<void>((resolve) => setTimeout(() => resolve(), 150))
+          ]);
+          // If next() completed, another handler likely processed it
+          // But we'll still respond as fallback if needed
+        } catch (error) {
+          // Other handlers may have processed or errored, continue to our response
+          logger.debug("Other handlers processing completed", { userId: ctx.from?.id });
+        }
+      }
+
+      // Enhanced question detection (more patterns)
+      const isQuestion = message.includes("?") || 
+                        message.includes("!") ||
+                        message.includes("wie") || 
+                        message.includes("was") || 
+                        message.includes("wo") || 
+                        message.includes("wann") || 
+                        message.includes("warum") ||
+                        message.includes("welche") ||
+                        message.includes("welcher") ||
+                        message.includes("welches") ||
+                        message.includes("help") ||
+                        message.includes("hilfe") ||
+                        message.includes("support") ||
+                        message.startsWith("was ") ||
+                        message.startsWith("wie ") ||
+                        message.startsWith("wo ") ||
+                        message.startsWith("wann ");
+
+      // Find matching response (optimized search)
+      let response = aiResponses.default;
+      let matchedKey = "default";
+      
+      if (isQuestion) {
+        for (const [key, value] of Object.entries(aiResponses)) {
+          if (key === "default") continue;
+          
+          if (message.includes(key)) {
+            response = value;
+            matchedKey = key;
+            break;
+          }
+        }
+      }
+
+      // Always respond - catch-all for any message
+      const suggestions = quickCommandHandler.getContextSuggestions(ctx);
+      const suggestionText = suggestions.length > 0 
+        ? `\n\n💡 **Schnelltipps:** ${suggestions.join(' • ')}`
+        : '';
+
+      // Enhanced response based on message type
+      let finalResponse = response;
+      
+      if (!isQuestion && matchedKey === "default") {
+        // Friendly response for non-questions
+        finalResponse = `👋 **Hallo!**\n\n` +
+          `Ich bin der Nebula Bot und helfe dir gerne weiter!\n\n` +
+          `💡 **Was möchtest du tun?**\n` +
+          `• Nutze `/menu` für das Hauptmenü\n` +
+          `• Stelle eine Frage (z.B. "was ist nebula?")\n` +
+          `• Nutze `/start` für eine Übersicht\n\n` +
+          `🚀 **Schnellzugriff:**`;
+      }
+
+      await ctx.reply(
+        finalResponse + suggestionText,
+        { 
+          parse_mode: "Markdown",
+          reply_markup: Markup.inlineKeyboard([
+            [Markup.button.callback("🏠 Hauptmenü", "menu_back")],
+            [Markup.button.callback("❓ Hilfe & FAQ", "simple_help")],
+            [Markup.button.webApp("🚀 WebApp öffnen", ctx.config.webAppUrl || "http://localhost:5173")]
+          ]).reply_markup
+        }
+      );
+
+      logger.info("Text message handled", { 
+        userId: ctx.from?.id, 
+        message: message.substring(0, 50),
+        isQuestion,
+        responseKey: matchedKey,
+        suggestions: suggestions.length
+      });
+    } catch (error) {
+      logger.error("Error in text handler", { 
+        error: String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        userId: ctx.from?.id
+      });
+      
+      // Always respond even on error
+      try {
         await ctx.reply(
-          "❌ **Invite-Code ungültig**\n\n" +
-          "Bitte prüfe deinen Code oder fordere einen neuen an.\n\n" +
-          "💡 **Gültige Codes:**\n" +
-          "• Beginnen mit 'VIP'\n" +
-          "• Haben 6+ Zeichen",
+          "⚠️ **Ups, etwas ist schiefgelaufen!**\n\n" +
+          "Bitte versuche es erneut oder nutze das Menü.\n\n" +
+          "💡 **Schnellhilfe:**",
           Markup.inlineKeyboard([
-            [Markup.button.callback("🔑 Neuen Code eingeben", "use_invite")],
-            [Markup.button.callback("🤳 Verifizierung verwenden", "start_verification")],
-            [Markup.button.callback("🔙 Zurück", "menu_back")]
+            [Markup.button.callback("🔄 Erneut versuchen", "menu_back")],
+            [Markup.button.callback("🏠 Hauptmenü", "menu_back")],
+            [Markup.button.callback("❓ Hilfe", "simple_help")]
           ])
         );
-      }
-      return;
-    }
-
-    // Try quick command handler first
-    const quickCommandHandled = await quickCommandHandler.processText(ctx, message);
-    if (quickCommandHandled) {
-      return; // Quick command was handled
-    }
-
-    // Fallback to AI chatbot for questions
-    const isQuestion = message.includes("?") || 
-                      message.includes("wie") || 
-                      message.includes("was") || 
-                      message.includes("wo") || 
-                      message.includes("wann") || 
-                      message.includes("warum") ||
-                      message.includes("help") ||
-                      message.includes("hilfe");
-
-    if (!isQuestion) {
-      return next();
-    }
-
-    // Find matching response
-    let response = aiResponses.default;
-    
-    for (const [key, value] of Object.entries(aiResponses)) {
-      if (key === "default") continue;
-      
-      if (message.includes(key)) {
-        response = value;
-        break;
+      } catch (replyError) {
+        logger.error("Failed to send error response", { error: String(replyError) });
       }
     }
-
-    // Send AI response with context-aware suggestions
-    const suggestions = quickCommandHandler.getContextSuggestions(ctx);
-    const suggestionText = suggestions.length > 0 
-      ? `\n\n💡 **Schnelltipps:** ${suggestions.join(' • ')}`
-      : '';
-
-    await ctx.reply(
-      response + suggestionText,
-      { 
-        parse_mode: "Markdown",
-        reply_markup: Markup.inlineKeyboard([
-          [Markup.button.callback("❓ Weitere Fragen", "simple_help")],
-          [Markup.button.callback("🔙 Zurück zum Menü", "menu_back")]
-        ]).reply_markup
-      }
-    );
-
-    logger.info("AI Support response sent", { 
-      userId: ctx.from?.id, 
-      question: message,
-      responseKey: Object.keys(aiResponses).find(key => message.includes(key)) || "default",
-      suggestions: suggestions.length
-    });
   });
 };

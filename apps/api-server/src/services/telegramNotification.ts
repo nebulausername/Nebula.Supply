@@ -467,6 +467,257 @@ Bitte prüfe das Selfie und bestätige, dass das Handzeichen korrekt ist.
     // Wait for all notifications to complete (don't fail if some fail)
     await Promise.allSettled(notificationPromises);
   }
+
+  /**
+   * Send ticket message notification to user when agent replies
+   */
+  async sendTicketMessageNotification(
+    ticket: {
+      id: string;
+      subject: string;
+      telegramUserId?: string;
+      userId?: string;
+    },
+    message: {
+      text: string;
+      senderName?: string;
+      timestamp: string;
+    }
+  ): Promise<void> {
+    if (!this.enabled) {
+      logger.debug('Telegram notifications disabled, skipping ticket message notification', { ticketId: ticket.id });
+      return;
+    }
+
+    if (!this.botToken) {
+      logger.warn('Cannot send ticket message notification: TELEGRAM_BOT_TOKEN not configured');
+      return;
+    }
+
+    // Get user Telegram ID - prefer telegramUserId, fallback to userId
+    const userTelegramId = ticket.telegramUserId || ticket.userId;
+    
+    if (!userTelegramId) {
+      logger.debug('[TelegramNotification] No Telegram user ID for ticket, skipping notification', {
+        ticketId: ticket.id,
+        hasTelegramUserId: !!ticket.telegramUserId,
+        hasUserId: !!ticket.userId
+      });
+      return;
+    }
+
+    const userIdNum = typeof userTelegramId === 'string' ? parseInt(userTelegramId) : userTelegramId;
+    if (isNaN(userIdNum) || userIdNum <= 0) {
+      logger.warn('[TelegramNotification] Invalid user Telegram ID', { userTelegramId, ticketId: ticket.id });
+      return;
+    }
+
+    logger.info('[TelegramNotification] Sending ticket message notification', {
+      ticketId: ticket.id,
+      userId: userIdNum,
+      messageLength: message.text.length
+    });
+
+    // Format message
+    const messagePreview = message.text.length > 150 
+      ? message.text.slice(0, 150) + '...' 
+      : message.text;
+
+    const notificationMessage = `💬 *Neue Nachricht zu deinem Ticket*\n\n` +
+      `🎫 *Ticket:* \`${ticket.id}\`\n` +
+      `📁 *Betreff:* ${this.escapeMarkdown(ticket.subject)}\n\n` +
+      `💬 *Nachricht:*\n${this.escapeMarkdown(messagePreview)}\n\n` +
+      `👤 *Von:* ${message.senderName ? this.escapeMarkdown(message.senderName) : 'Support Team'}\n` +
+      `⏰ *Zeit:* ${new Date(message.timestamp).toLocaleString('de-DE')}\n\n` +
+      `_Antworte direkt hier oder öffne das Ticket in der App._`;
+
+    // Create inline keyboard with quick actions
+    const webAppUrl = process.env.WEB_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
+    const inlineKeyboard = {
+      inline_keyboard: [
+        [
+          {
+            text: '📋 Ticket öffnen',
+            url: `${webAppUrl}/profile?tab=tickets&ticket=${ticket.id}`
+          }
+        ],
+        [
+          {
+            text: '💬 Antworten',
+            callback_data: `ticket_reply_${ticket.id}`
+          },
+          {
+            text: '📋 Alle Tickets',
+            callback_data: 'support_list'
+          }
+        ]
+      ]
+    };
+
+    // Send notification with retry logic
+    const sendWithRetry = async (retries = 3): Promise<void> => {
+      for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+          const telegramApiUrl = `https://api.telegram.org/bot${this.botToken}/sendMessage`;
+          
+          // Create AbortController for timeout
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+          
+          // Try Markdown first
+          let parseMode: 'Markdown' | 'HTML' = 'Markdown';
+          let messageText = notificationMessage;
+          
+          const response = await fetch(telegramApiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              chat_id: userIdNum,
+              text: messageText,
+              parse_mode: parseMode,
+              reply_markup: inlineKeyboard
+            }),
+            signal: controller.signal
+          });
+
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+            const errorDescription = errorData?.description || errorData?.error || 'Unknown error';
+            
+            // If user blocked the bot or chat doesn't exist, don't retry
+            if (errorDescription.includes('blocked') || 
+                errorDescription.includes('chat not found') ||
+                errorDescription.includes('user is deactivated')) {
+              logger.warn('[TelegramNotification] User cannot receive messages', {
+                userId: userIdNum,
+                ticketId: ticket.id,
+                error: errorDescription
+              });
+              return; // Don't retry
+            }
+            
+            // If Markdown parsing failed, try HTML fallback
+            if ((errorDescription.includes('parse') || errorDescription.includes('Markdown') || errorDescription.includes('format')) && attempt === 1) {
+              logger.debug('[TelegramNotification] Markdown parsing failed, trying HTML fallback', {
+                userId: userIdNum,
+                ticketId: ticket.id,
+                error: errorDescription
+              });
+              
+              // Convert to HTML and retry immediately
+              parseMode = 'HTML';
+              messageText = this.markdownToHtml(notificationMessage);
+              
+              const htmlResponse = await fetch(telegramApiUrl, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  chat_id: userIdNum,
+                  text: messageText,
+                  parse_mode: 'HTML',
+                  reply_markup: inlineKeyboard
+                }),
+                signal: controller.signal
+              });
+
+              if (htmlResponse.ok) {
+                logger.info('[TelegramNotification] Ticket message notification sent (HTML fallback)', {
+                  userId: userIdNum,
+                  ticketId: ticket.id,
+                  attempt
+                });
+                return; // Success with HTML
+              }
+            }
+            
+            throw new Error(`Telegram API error: ${JSON.stringify(errorData)}`);
+          }
+
+          logger.info('[TelegramNotification] Ticket message notification sent', {
+            userId: userIdNum,
+            ticketId: ticket.id,
+            attempt,
+            parseMode
+          });
+          return; // Success, exit retry loop
+        } catch (error) {
+          const isTimeout = error instanceof Error && error.name === 'AbortError';
+          const isLastAttempt = attempt === retries;
+          
+          if (isLastAttempt) {
+            logger.error('[TelegramNotification] Failed to send ticket message notification after retries', {
+              error: error instanceof Error ? error.message : String(error),
+              userId: userIdNum,
+              ticketId: ticket.id,
+              attempts: retries,
+              isTimeout
+            });
+            return; // Give up after all retries
+          }
+
+          // Exponential backoff: 1s, 2s, 4s
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 4000);
+          logger.debug('[TelegramNotification] Retrying ticket message notification', {
+            userId: userIdNum,
+            attempt,
+            retries,
+            delay,
+            isTimeout,
+            error: error instanceof Error ? error.message : String(error)
+          });
+          
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    };
+
+    // Send notification (don't await - fire and forget)
+    sendWithRetry().catch(error => {
+      logger.error('[TelegramNotification] Unhandled error in ticket message notification', {
+        error: error instanceof Error ? error.message : String(error),
+        ticketId: ticket.id
+      });
+    });
+  }
+
+  private escapeMarkdown(text: string): string {
+    if (!text || typeof text !== 'string') return '';
+    // Escape special Markdown characters
+    return String(text)
+      .replace(/\*/g, '\\*')
+      .replace(/_/g, '\\_')
+      .replace(/\[/g, '\\[')
+      .replace(/\]/g, '\\]')
+      .replace(/\(/g, '\\(')
+      .replace(/\)/g, '\\)')
+      .replace(/~/g, '\\~')
+      .replace(/`/g, '\\`')
+      .replace(/>/g, '\\>')
+      .replace(/#/g, '\\#')
+      .replace(/\+/g, '\\+')
+      .replace(/-/g, '\\-')
+      .replace(/=/g, '\\=')
+      .replace(/\|/g, '\\|')
+      .replace(/\{/g, '\\{')
+      .replace(/\}/g, '\\}')
+      .replace(/\./g, '\\.')
+      .replace(/!/g, '\\!');
+  }
+
+  private markdownToHtml(text: string): string {
+    if (!text || typeof text !== 'string') return '';
+    return String(text)
+      .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+      .replace(/\*(.+?)\*/g, '<i>$1</i>')
+      .replace(/`(.+?)`/g, '<code>$1</code>')
+      .replace(/\n/g, '\n');
+  }
 }
 
 export const telegramNotificationService = new TelegramNotificationService();

@@ -182,8 +182,9 @@ export const DropCard = memo(({
           "hover:shadow-2xl hover:shadow-purple-500/20",
           "hover:border-purple-500/40",
           "border border-white/10 rounded-xl backdrop-blur-sm",
-          isDragging && "opacity-30 scale-95 cursor-grabbing",
-          isDragOver && "ring-4 ring-purple-500/80 bg-purple-500/30 scale-[1.03] border-purple-400 shadow-2xl shadow-purple-500/50",
+          "touch-manipulation", // Better touch support
+          isDragging && "opacity-30 scale-95 cursor-grabbing z-50",
+          isDragOver && "ring-4 ring-purple-500/80 bg-purple-500/30 scale-[1.03] border-purple-400 shadow-2xl shadow-purple-500/50 animate-pulse",
           isUpdating && "ring-2 ring-yellow-500/50 bg-yellow-500/5",
           updateSuccess && "ring-2 ring-green-500/50 bg-green-500/5",
           updateError && "ring-2 ring-red-500/50 bg-red-500/5",
@@ -191,9 +192,40 @@ export const DropCard = memo(({
         )}
         draggable
         onDragStart={(e) => onDragStart(e, drop.id)}
-        onDragOver={(e) => onDragOver(e, index)}
+        onDragOver={(e) => {
+          e.preventDefault();
+          onDragOver(e, index);
+        }}
         onDragLeave={onDragLeave}
         onDrop={(e) => onDrop(e, index)}
+        onTouchStart={(e) => {
+          // Touch support for mobile drag
+          const touch = e.touches[0];
+          const element = e.currentTarget;
+          const startX = touch.clientX;
+          const startY = touch.clientY;
+          
+          const handleTouchMove = (moveEvent: TouchEvent) => {
+            const moveTouch = moveEvent.touches[0];
+            const deltaX = moveTouch.clientX - startX;
+            const deltaY = moveTouch.clientY - startY;
+            
+            // If moved significantly, start drag
+            if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
+              onDragStart(e as any, drop.id);
+              element.removeEventListener('touchmove', handleTouchMove);
+              element.removeEventListener('touchend', handleTouchEnd);
+            }
+          };
+          
+          const handleTouchEnd = () => {
+            element.removeEventListener('touchmove', handleTouchMove);
+            element.removeEventListener('touchend', handleTouchEnd);
+          };
+          
+          element.addEventListener('touchmove', handleTouchMove, { passive: true });
+          element.addEventListener('touchend', handleTouchEnd);
+        }}
       >
         {/* Update Status Indicators */}
         <AnimatePresence>

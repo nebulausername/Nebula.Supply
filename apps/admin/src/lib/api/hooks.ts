@@ -199,20 +199,75 @@ export const useTickets = (filters?: {
     },
     staleTime: 30 * 1000, // 30 Sekunden
     gcTime: 5 * 60 * 1000, // 5 Minuten
-    retry: 3,
+    retry: (failureCount, error: any) => {
+      // Don't retry on 4xx errors (except 429 rate limit)
+      if (error?.status >= 400 && error?.status < 500 && error?.status !== 429) {
+        return false;
+      }
+      return failureCount < 3;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
     refetchOnWindowFocus: true,
-    refetchOnMount: true,
+    refetchOnMount: 'always',
+    // Stale-While-Revalidate: Show cached data immediately
+    placeholderData: (previousData) => previousData,
   });
 };
 
 export const useTicket = (id: string) => {
+  const queryClient = useQueryClient();
+  
   return useQuery({
     queryKey: queryKeys.tickets.detail(id),
-    queryFn: () => api.get(`/api/tickets/${id}`),
+    queryFn: async () => {
+      try {
+        const response = await api.get(`/api/tickets/${id}`);
+        return response;
+      } catch (error) {
+        // Enhanced error handling with retry logic
+        logger.error('Failed to fetch ticket', { ticketId: id, error });
+        throw error;
+      }
+    },
     staleTime: 60 * 1000, // 1 Minute für Ticket-Details
     gcTime: 10 * 60 * 1000, // 10 Minuten
-    retry: 3,
+    retry: (failureCount, error: any) => {
+      // Don't retry on 404 (ticket not found)
+      if (error?.status === 404) return false;
+      // Retry up to 3 times with exponential backoff
+      return failureCount < 3;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000), // Exponential backoff, max 10s
     enabled: !!id, // Nur fetchen wenn ID vorhanden
+    // Stale-While-Revalidate: Show cached data immediately, refetch in background
+    placeholderData: (previousData) => previousData,
+    // Refetch on window focus for fresh data
+    refetchOnWindowFocus: true,
+    // Refetch on mount if data is stale
+    refetchOnMount: 'always',
+  });
+};
+
+// Prefetch function for ticket details (use on hover)
+export const prefetchTicket = async (ticketId: string, queryClient: ReturnType<typeof useQueryClient>) => {
+  if (!ticketId) return;
+  
+  // Check if we already have fresh data
+  const existingData = queryClient.getQueryData(queryKeys.tickets.detail(ticketId));
+  if (existingData) {
+    // Data exists, check if it's stale
+    const queryState = queryClient.getQueryState(queryKeys.tickets.detail(ticketId));
+    if (queryState && queryState.dataUpdatedAt && Date.now() - queryState.dataUpdatedAt < 60000) {
+      // Data is fresh (< 1 minute), skip prefetch
+      return;
+    }
+  }
+  
+  // Prefetch in background
+  await queryClient.prefetchQuery({
+    queryKey: queryKeys.tickets.detail(ticketId),
+    queryFn: () => api.get(`/api/tickets/${ticketId}`),
+    staleTime: 60 * 1000,
   });
 };
 
@@ -285,24 +340,33 @@ export const useCreateTicket = () => {
     },
 
     onSuccess: (newTicket, variables, context) => {
+      // Extract ticket from response (handle different formats)
+      const createdTicket = newTicket?.data || newTicket?.data?.data || newTicket;
+      
       // Replace temporary ticket with real one
       queryClient.setQueriesData(
         { queryKey: queryKeys.tickets.list() },
         (old: any) => {
           if (!old?.data) return old;
+          
+          // Remove optimistic ticket and add real one
+          const filtered = Array.isArray(old.data) 
+            ? old.data.filter((t: any) => !t.isOptimistic)
+            : [];
+          
           return {
             ...old,
-            data: old.data.map((ticket: any) =>
-              ticket.id === context?.tempTicket.id ? newTicket : ticket
-            )
+            data: createdTicket ? [createdTicket, ...filtered] : filtered
           };
         }
       );
 
-      // Set detail query
-      queryClient.setQueryData(queryKeys.tickets.detail(newTicket.id), newTicket);
-
-      // Background refetch for consistency
+      // Set detail query with extracted ticket
+      if (createdTicket?.id) {
+        queryClient.setQueryData(queryKeys.tickets.detail(createdTicket.id), createdTicket);
+      }
+      
+      // Invalidate queries for consistency
       queryClient.invalidateQueries({ 
         queryKey: queryKeys.tickets.list(),
         refetchType: 'active'
@@ -316,7 +380,7 @@ export const useCreateTicket = () => {
         refetchType: 'active'
       });
 
-      logger.info('Ticket created successfully', { ticketId: newTicket.id });
+      logger.info('Ticket created successfully', { ticketId: createdTicket?.id || 'unknown' });
     },
 
     onError: (error, variables, context) => {

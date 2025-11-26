@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { logger } from '../../lib/logger';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Clock, Tag, MessageSquare, Send, MoreVertical, UserPlus, AlertTriangle, FileText, History, Check, ShoppingBag, TrendingUp, Zap } from 'lucide-react';
+import { X, User, Clock, Tag, MessageSquare, Send, MoreVertical, UserPlus, AlertTriangle, FileText, History, Check, ShoppingBag, TrendingUp, Zap, RefreshCw } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -16,7 +17,6 @@ import { QuickActionsPanel } from './QuickActionsPanel';
 import { useTicket, useUpdateTicketStatus, useTicketAssign, useUpdateTicketPriority, useTicketTags } from '../../lib/api/hooks';
 import { useMobile } from '../../hooks/useMobile';
 import { useToast } from '../ui/Toast';
-import { logger } from '../../lib/logger';
 import type { TicketStatus, TicketPriority } from '@nebula/shared/types';
 import { cn } from '../../utils/cn';
 
@@ -46,13 +46,53 @@ export function TicketDetailPanel({ ticketId, onClose }: TicketDetailPanelProps)
   const [showAssignment, setShowAssignment] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'messages' | 'activity'>('messages');
-  const { data: ticketResponse, isLoading } = useTicket(ticketId);
+  const { data: ticketResponse, isLoading, error, refetch } = useTicket(ticketId);
   const updateStatus = useUpdateTicketStatus();
   const assignMutation = useTicketAssign();
   const updatePriority = useUpdateTicketPriority();
   const updateTags = useTicketTags();
 
-  const ticket = ticketResponse?.data;
+  // Handle different response formats
+  const ticket = useMemo(() => {
+    if (!ticketResponse) return null;
+    
+    // Handle direct ticket object
+    if (ticketResponse && typeof ticketResponse === 'object' && 'id' in ticketResponse) {
+      return ticketResponse as any;
+    }
+    
+    // Handle nested data structure
+    if (ticketResponse?.data) {
+      // If data is the ticket directly
+      if (typeof ticketResponse.data === 'object' && 'id' in ticketResponse.data) {
+        return ticketResponse.data;
+      }
+      // If data.data contains the ticket
+      if (ticketResponse.data?.data && typeof ticketResponse.data.data === 'object' && 'id' in ticketResponse.data.data) {
+        return ticketResponse.data.data;
+      }
+    }
+    
+    // Try to extract from success response
+    if (ticketResponse?.success && ticketResponse?.data) {
+      return ticketResponse.data;
+    }
+    
+    return null;
+  }, [ticketResponse]);
+  
+  // Retry logic if ticket not found
+  useEffect(() => {
+    if (!ticket && !isLoading && error && ticketId) {
+      // Wait a bit and retry (maybe ticket was just created)
+      const retryTimeout = setTimeout(() => {
+        logger.info('Retrying ticket fetch', { ticketId });
+        refetch();
+      }, 2000);
+      
+      return () => clearTimeout(retryTimeout);
+    }
+  }, [ticket, isLoading, error, ticketId, refetch]);
 
   // Define handlers before useEffect to avoid initialization errors
   const handleStatusChange = useCallback(async (newStatus: TicketStatus) => {
@@ -259,21 +299,20 @@ export function TicketDetailPanel({ ticketId, onClose }: TicketDetailPanelProps)
     );
   }
 
-  if (!ticket) {
+  // Show loading state
+  if (isLoading) {
     if (isMobile) {
       return (
         <MobileTicketSheet
           isOpen={true}
           onClose={onClose}
-          title="Ticket not found"
+          title="Loading Ticket..."
           snapPoints={[50]}
           defaultSnapPoint={0}
         >
-          <div className="text-center text-muted p-4">
-            <p className="mb-4">Ticket not found</p>
-            <Button variant="outline" size="sm" onClick={onClose}>
-              Close
-            </Button>
+          <div className="text-center p-4">
+            <LoadingSpinner size="lg" />
+            <p className="mt-4 text-muted">Loading ticket details...</p>
           </div>
         </MobileTicketSheet>
       );
@@ -285,11 +324,78 @@ export function TicketDetailPanel({ ticketId, onClose }: TicketDetailPanelProps)
         exit={{ x: 400, opacity: 0 }}
         className="fixed right-0 top-0 bottom-0 w-[600px] bg-surface border-l border-white/10 z-50 flex items-center justify-center"
       >
-        <div className="text-center text-muted">
-          <p>Ticket not found</p>
-          <Button variant="outline" size="sm" onClick={onClose} className="mt-4">
-            Close
-          </Button>
+        <div className="text-center">
+          <LoadingSpinner size="lg" />
+          <p className="mt-4 text-muted">Loading ticket details...</p>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // Show error or not found state with retry option
+  if (!ticket || error) {
+    if (isMobile) {
+      return (
+        <MobileTicketSheet
+          isOpen={true}
+          onClose={onClose}
+          title="Ticket"
+          snapPoints={[50]}
+          defaultSnapPoint={0}
+        >
+          <div className="text-center text-muted p-4 space-y-4">
+            <div>
+              <p className="mb-2 text-lg font-semibold">Ticket wird geladen...</p>
+              <p className="text-sm mb-4">
+                {error ? 'Fehler beim Laden des Tickets' : 'Ticket wird abgerufen...'}
+              </p>
+            </div>
+            <div className="flex gap-2 justify-center">
+              <Button variant="outline" size="sm" onClick={() => refetch()}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Erneut versuchen
+              </Button>
+              <Button variant="outline" size="sm" onClick={onClose}>
+                Schließen
+              </Button>
+            </div>
+            {ticketId && (
+              <p className="text-xs text-muted mt-4">
+                Ticket ID: {ticketId}
+              </p>
+            )}
+          </div>
+        </MobileTicketSheet>
+      );
+    }
+    return (
+      <motion.div
+        initial={{ x: 400, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        exit={{ x: 400, opacity: 0 }}
+        className="fixed right-0 top-0 bottom-0 w-[600px] bg-surface border-l border-white/10 z-50 flex items-center justify-center"
+      >
+        <div className="text-center text-muted p-8 space-y-4">
+          <div>
+            <p className="mb-2 text-lg font-semibold">Ticket wird geladen...</p>
+            <p className="text-sm mb-4">
+              {error ? 'Fehler beim Laden des Tickets' : 'Ticket wird abgerufen...'}
+            </p>
+          </div>
+          <div className="flex gap-2 justify-center">
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Erneut versuchen
+            </Button>
+            <Button variant="outline" size="sm" onClick={onClose}>
+              Schließen
+            </Button>
+          </div>
+          {ticketId && (
+            <p className="text-xs text-muted mt-4">
+              Ticket ID: {ticketId}
+            </p>
+          )}
         </div>
       </motion.div>
     );

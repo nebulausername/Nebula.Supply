@@ -186,9 +186,14 @@ export const TicketMessageThread = memo(function TicketMessageThread({
               <motion.div
                 key={message.id}
                 data-message-id={message.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2 }}
+                initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ 
+                  duration: 0.3,
+                  type: 'spring',
+                  stiffness: 300,
+                  damping: 25
+                }}
                 className={cn(
                   'flex gap-3',
                   isAgent ? 'flex-row-reverse' : 'flex-row'
@@ -226,15 +231,23 @@ export const TicketMessageThread = memo(function TicketMessageThread({
 
                   {/* Message Bubble */}
                   <motion.div
-                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    transition={{ duration: 0.2, ease: 'easeOut' }}
+                    initial={{ opacity: 0, scale: 0.9, y: 10, x: isAgent ? 10 : -10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
+                    transition={{ 
+                      duration: 0.3,
+                      type: 'spring',
+                      stiffness: 400,
+                      damping: 30,
+                      delay: 0.05
+                    }}
+                    whileHover={{ scale: 1.02 }}
                     className={cn(
                       'inline-block rounded-2xl px-4 py-2 max-w-[80%] shadow-lg',
                       isAgent
                         ? 'bg-primary/20 text-text border border-primary/30 shadow-primary/10'
                         : 'bg-surface/70 text-text border border-white/10 shadow-black/10',
-                      isMobile && 'max-w-[85%] px-3 py-2 text-sm'
+                      isMobile && 'max-w-[85%] px-3 py-2 text-sm',
+                      'transition-shadow duration-200'
                     )}
                   >
                     <p className="whitespace-pre-wrap break-words">{message.text}</p>

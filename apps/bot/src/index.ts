@@ -53,21 +53,45 @@ if (!appConfig.botToken || appConfig.botToken === 'your_telegram_bot_token_here'
 
 const bot = new Telegraf<NebulaContext>(appConfig.botToken);
 
-// Apply middlewares
+// Apply middlewares in optimized order
+// 1. Config (fastest, no I/O)
 bot.use(createConfigMiddleware(appConfig));
+
+// 2. Session (needs config, may use Redis)
 bot.use(sessionMiddleware);
+
+// 3. Rate limiting (protects against abuse)
 bot.use(rateLimitMiddleware);
+
+// 4. Performance monitoring (tracks response times)
 bot.use(performanceMiddleware);
 
-// Track analytics on every update
+// 5. Analytics tracking (non-blocking)
 bot.use(async (ctx, next) => {
-  const analytics = getAnalytics();
-  analytics.trackInteraction('update', ctx, { type: ctx.updateType });
-  return next();
+  const startTime = Date.now();
+  try {
+    await next();
+  } finally {
+    const duration = Date.now() - startTime;
+    const analytics = getAnalytics();
+    analytics.trackInteraction('update', ctx, { 
+      type: ctx.updateType,
+      duration 
+    });
+    
+    // Log slow requests (>1s)
+    if (duration > 1000) {
+      logger.warn('Slow request detected', {
+        userId: ctx.from?.id,
+        updateType: ctx.updateType,
+        duration
+      });
+    }
+  }
 });
 
 // Register flows based on feature flags
-registerSimplifiedMenu(bot);
+// IMPORTANT: Register specialized handlers FIRST, simplifiedMenu LAST (as catch-all)
 
 if (appConfig.enableVerification) {
   registerVerificationSystem(bot);
@@ -104,6 +128,9 @@ registerFAQ(bot);
 
 // Register premium features
 registerPremiumFeatures(bot);
+
+// Register simplified menu LAST as catch-all handler (always responds)
+registerSimplifiedMenu(bot);
 
 // Register common button actions
 registerCommonButtons();

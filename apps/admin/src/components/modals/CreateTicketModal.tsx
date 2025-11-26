@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { X, Ticket } from 'lucide-react';
+import { useState, useCallback, lazy, Suspense } from 'react';
+import { X, Ticket, FileText } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/Dialog';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -8,11 +8,17 @@ import { useCreateTicket } from '../../lib/api/hooks';
 import { logger } from '../../lib/logger';
 import { useToast } from '../ui/Toast';
 import { cn } from '../../utils/cn';
+import type { TicketTemplate } from '../tickets/TicketTemplates';
+
+// Lazy load TicketTemplates for code splitting
+const TicketTemplates = lazy(() => 
+  import('../tickets/TicketTemplates').then(module => ({ default: module.TicketTemplates }))
+);
 
 interface CreateTicketModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess?: () => void;
+  onSuccess?: (ticketId?: string) => void;
 }
 
 const PRIORITIES = [
@@ -38,9 +44,19 @@ export function CreateTicketModal({ isOpen, onClose, onSuccess }: CreateTicketMo
   const [category, setCategory] = useState<string>('support');
   const [userId, setUserId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
   const { showToast } = useToast();
   
   const createTicketMutation = useCreateTicket();
+
+  const handleTemplateSelect = useCallback((template: TicketTemplate) => {
+    setSubject(template.subject);
+    setDescription(template.summary || template.message);
+    setPriority(template.priority);
+    setCategory(template.category);
+    setShowTemplates(false);
+    showToast({ type: 'success', title: 'Template applied' });
+  }, [showToast]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,10 +76,13 @@ export function CreateTicketModal({ isOpen, onClose, onSuccess }: CreateTicketMo
         tags: []
       };
 
-      await createTicketMutation.mutateAsync(ticketData);
+      const response = await createTicketMutation.mutateAsync(ticketData);
       
-      logger.info('Ticket created successfully', { subject, priority, category });
-      showToast({ type: 'success', title: 'Ticket created successfully' });
+      // Extract ticket ID from response (handle different formats)
+      const ticketId = response?.data?.id || response?.data?.data?.id || response?.id || response?.data;
+      
+      logger.info('Ticket created successfully', { subject, priority, category, ticketId });
+      showToast({ type: 'success', title: 'Ticket erstellt! 🎉', message: 'Das Ticket wurde erfolgreich erstellt' });
       
       // Reset form
       setSubject('');
@@ -72,7 +91,8 @@ export function CreateTicketModal({ isOpen, onClose, onSuccess }: CreateTicketMo
       setCategory('support');
       setUserId('');
       
-      onSuccess?.();
+      // Pass ticket ID to success handler so it can open the ticket
+      onSuccess?.(ticketId);
       onClose();
     } catch (error) {
       logger.error('Failed to create ticket', { error });
@@ -97,12 +117,32 @@ export function CreateTicketModal({ isOpen, onClose, onSuccess }: CreateTicketMo
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Ticket className="w-5 h-5" />
-            Create New Ticket
-          </DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="flex items-center gap-2">
+              <Ticket className="w-5 h-5" />
+              Create New Ticket
+            </DialogTitle>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowTemplates(!showTemplates)}
+              className="gap-2"
+            >
+              <FileText className="w-4 h-4" />
+              Templates
+            </Button>
+          </div>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Templates Section */}
+          {showTemplates && (
+            <div className="border border-white/10 rounded-lg p-4 bg-surface/30">
+              <Suspense fallback={<div className="text-center py-4 text-muted">Loading templates...</div>}>
+                <TicketTemplates mode="select" onSelectTemplate={handleTemplateSelect} />
+              </Suspense>
+            </div>
+          )}
         {/* Subject */}
         <div>
           <label className="block text-sm font-medium text-text mb-2">

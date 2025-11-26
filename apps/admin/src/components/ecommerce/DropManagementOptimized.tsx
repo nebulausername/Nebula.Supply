@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, memo, useTransition, Suspense } from 'react';
+import React, { useState, useCallback, useMemo, memo, useTransition, Suspense, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -10,6 +10,8 @@ import { InlineEdit } from '../ui/InlineEdit';
 import { ImagePicker } from '../media/ImagePicker';
 import { SkeletonCard, Skeleton } from '../ui/Skeleton';
 import { DropCard } from './DropCard';
+import { VirtualizedDropGrid } from './VirtualizedDropGrid';
+import { VirtualizedList } from '../ui/VirtualizedList';
 import { 
   Zap, 
   Plus, 
@@ -47,14 +49,20 @@ import { usePerformanceMonitor } from '../../lib/hooks/usePerformanceMonitor';
 import { useDebounce } from '../../lib/hooks/useDebounce';
 import { useKeyboardShortcuts } from '../../lib/hooks/useKeyboardShortcuts';
 import { useQueryClient } from '@tanstack/react-query';
-import { useDrops, useUpdateDrop, useBulkAction, useReorderDrops, useCreateDrop } from '../../lib/api/hooks';
+import { useDrops, useUpdateDrop, useBulkAction, useReorderDrops, useCreateDrop, queryKeys } from '../../lib/api/hooks';
 import { useRealtimeDrops } from '../../lib/websocket/useRealtimeDrops';
 import { logger } from '../../lib/logger';
 import { cn } from '../../utils/cn';
-import { DropDetailsModal } from './DropDetailsModal';
-import { EditDropModal } from './EditDropModal';
-import { StockUpdateModal } from './StockUpdateModal';
 import { useToast } from '../ui/Toast';
+import { getStatusBadge, getAccessBadge, getPriorityBadge } from './dropBadges';
+import { DropFilters as DropFiltersComponent, DropFilters as DropFiltersType } from './DropFilters';
+import { BulkDropOperations } from './BulkDropOperations';
+import { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp';
+
+// Lazy load modals for code splitting
+const DropDetailsModal = React.lazy(() => import('./DropDetailsModal').then(module => ({ default: module.DropDetailsModal })));
+const EditDropModal = React.lazy(() => import('./EditDropModal').then(module => ({ default: module.EditDropModal })));
+const StockUpdateModal = React.lazy(() => import('./StockUpdateModal').then(module => ({ default: module.StockUpdateModal })));
 
 interface DropManagementProps {
   viewMode: 'grid' | 'list';
@@ -93,8 +101,22 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(savedFilters?.sortOrder || 'desc');
   const [filterStatus, setFilterStatus] = useState<string[]>(savedFilters?.filterStatus || []);
   const [filterAccess, setFilterAccess] = useState<string[]>(savedFilters?.filterAccess || []);
+  const [advancedFilters, setAdvancedFilters] = useState<DropFiltersType>({
+    status: filterStatus,
+    access: filterAccess,
+    stockLevel: 'all',
+  });
   const [draggedDropId, setDraggedDropId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  // Sync advanced filters with simple filters
+  React.useEffect(() => {
+    setAdvancedFilters(prev => ({
+      ...prev,
+      status: filterStatus,
+      access: filterAccess,
+    }));
+  }, [filterStatus, filterAccess]);
 
   // Save filter preferences to localStorage
   React.useEffect(() => {
@@ -146,56 +168,80 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
     },
     onDropUpdated: (event) => {
       logger.info('Drop updated via WebSocket', { dropId: event.dropId });
-      // Optimistic update: Update cache immediately
+      // Optimistic update: Update cache immediately - no refetch needed
       if (event.drop) {
-        queryClient.setQueryData(['drops'], (old: any) => {
-          if (!Array.isArray(old)) return old;
-          return old.map((d: any) => d && d.id === event.dropId ? { ...d, ...event.drop } : d);
-        });
+        queryClient.setQueriesData(
+          { queryKey: ['drops', 'list'] },
+          (old: any) => {
+            if (!old?.data) return old;
+            const data = Array.isArray(old.data) ? old.data : (old.data?.data || []);
+            return {
+              ...old,
+              data: data.map((d: any) => d && d.id === event.dropId ? { ...d, ...event.drop } : d)
+            };
+          }
+        );
       }
-      refetchDrops();
       toast.info('Drop aktualisiert', 'Ein Drop wurde von einem anderen Benutzer aktualisiert.');
     },
     onDropCreated: (event) => {
       logger.info('Drop created via WebSocket', { dropId: event.dropId });
-      // Optimistic update: Add to cache immediately
+      // Optimistic update: Add to cache immediately - no refetch needed
       if (event.drop) {
-        queryClient.setQueryData(['drops'], (old: any) => {
-          if (!Array.isArray(old)) return [event.drop];
-          return [event.drop, ...old];
-        });
+        queryClient.setQueriesData(
+          { queryKey: ['drops', 'list'] },
+          (old: any) => {
+            if (!old?.data) return { ...old, data: [event.drop] };
+            const data = Array.isArray(old.data) ? old.data : (old.data?.data || []);
+            return {
+              ...old,
+              data: [event.drop, ...data]
+            };
+          }
+        );
       }
-      refetchDrops();
       toast.info('Neuer Drop', 'Ein neuer Drop wurde erstellt.');
     },
     onDropDeleted: (event) => {
       logger.info('Drop deleted via WebSocket', { dropId: event.dropId });
-      // Optimistic update: Remove from cache immediately
-      queryClient.setQueryData(['drops'], (old: any) => {
-        if (!Array.isArray(old)) return old;
-        return old.filter((d: any) => d && d.id !== event.dropId);
-      });
-      refetchDrops();
+      // Optimistic update: Remove from cache immediately - no refetch needed
+      queryClient.setQueriesData(
+        { queryKey: ['drops', 'list'] },
+        (old: any) => {
+          if (!old?.data) return old;
+          const data = Array.isArray(old.data) ? old.data : (old.data?.data || []);
+          return {
+            ...old,
+            data: data.filter((d: any) => d && d.id !== event.dropId)
+          };
+        }
+      );
       toast.warning('Drop gelöscht', 'Ein Drop wurde gelöscht.');
     },
     onProgressUpdated: (event) => {
       logger.info('Drop progress updated via WebSocket', { dropId: event.dropId });
-      // Optimistic update: Update progress immediately
-      queryClient.setQueryData(['drops'], (old: any) => {
-        if (!Array.isArray(old)) return old;
-        return old.map((d: any) => {
-          if (d && d.id === event.dropId) {
-            return {
-              ...d,
-              progress: event.progress,
-              totalStock: event.totalStock,
-              soldCount: event.soldCount
-            };
-          }
-          return d;
-        });
-      });
-      refetchDrops();
+      // Optimistic update: Update progress immediately - no refetch needed
+      queryClient.setQueriesData(
+        { queryKey: ['drops', 'list'] },
+        (old: any) => {
+          if (!old?.data) return old;
+          const data = Array.isArray(old.data) ? old.data : (old.data?.data || []);
+          return {
+            ...old,
+            data: data.map((d: any) => {
+              if (d && d.id === event.dropId) {
+                return {
+                  ...d,
+                  progress: event.progress,
+                  totalStock: event.totalStock,
+                  soldCount: event.soldCount
+                };
+              }
+              return d;
+            })
+          };
+        }
+      );
       toast.info('Fortschritt aktualisiert', 'Der Fortschritt eines Drops wurde aktualisiert.');
     }
   });
@@ -221,46 +267,148 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
       }));
   }, [drops]);
 
+  // Virtual scrolling thresholds
+  const VIRTUAL_SCROLL_THRESHOLD_GRID = 40;
+  const VIRTUAL_SCROLL_THRESHOLD_LIST = 80;
+  
+  // Container dimensions for virtual scrolling
+  const [containerDimensions, setContainerDimensions] = useState({ width: 1920, height: 800 });
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    const updateDimensions = () => {
+      if (containerRef.current) {
+        setContainerDimensions({
+          width: containerRef.current.clientWidth || window.innerWidth,
+          height: window.innerHeight - 300,
+        });
+      }
+    };
+    
+    updateDimensions();
+    window.addEventListener('resize', updateDimensions);
+    return () => window.removeEventListener('resize', updateDimensions);
+  }, []);
+  
   // Pagination for better performance
   const [page, setPage] = useState(1);
   const itemsPerPage = viewMode === 'grid' ? 20 : 50;
   
-  // Filter and sort drops - memoized for performance
-  const filteredDrops = useMemo(() => {
-    // Defensive check: ensure processedDrops is always an array
+  // Determine if virtual scrolling should be used
+  const useVirtualScrolling = useMemo(() => 
+    filteredDrops.length > VIRTUAL_SCROLL_THRESHOLD_GRID && viewMode === 'grid',
+    [filteredDrops.length, viewMode]
+  );
+  const useVirtualTableScrolling = useMemo(() => 
+    filteredDrops.length > VIRTUAL_SCROLL_THRESHOLD_LIST && viewMode === 'list',
+    [filteredDrops.length, viewMode]
+  );
+  
+  // Search filter - separate memoization for better performance
+  const searchFilteredDrops = useMemo(() => {
     if (!Array.isArray(processedDrops) || processedDrops.length === 0) {
       return [];
     }
+    
+    if (!searchTerm) {
+      return processedDrops;
+    }
+    
+    const term = searchTerm.toLowerCase();
+    return processedDrops.filter(drop => {
+      if (!drop) return false;
+      return (
+        drop.name?.toLowerCase().includes(term) ||
+        drop.description?.toLowerCase().includes(term) ||
+        drop.badge?.toLowerCase().includes(term) ||
+        drop.flavorTag?.toLowerCase().includes(term) ||
+        (Array.isArray(drop.variants) && drop.variants.some((v: any) => v?.label?.toLowerCase().includes(term)))
+      );
+    });
+  }, [processedDrops, searchTerm]);
 
-    let filtered = [...processedDrops];
+  // Status filter - separate memoization
+  const statusFilteredDrops = useMemo(() => {
+    if (!Array.isArray(filterStatus) || filterStatus.length === 0) {
+      return searchFilteredDrops;
+    }
+    return searchFilteredDrops.filter(drop => drop && drop.status && filterStatus.includes(drop.status));
+  }, [searchFilteredDrops, filterStatus]);
 
-    // Search filter
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
+  // Access filter - separate memoization
+  const accessFilteredDrops = useMemo(() => {
+    if (!Array.isArray(filterAccess) || filterAccess.length === 0) {
+      return statusFilteredDrops;
+    }
+    return statusFilteredDrops.filter(drop => drop && drop.access && filterAccess.includes(drop.access));
+  }, [statusFilteredDrops, filterAccess]);
+
+  // Advanced filters (date, price, stock) - separate memoization
+  const advancedFilteredDrops = useMemo(() => {
+    let filtered = accessFilteredDrops;
+
+    // Date filter
+    if (advancedFilters.dateFrom) {
+      const dateFrom = new Date(advancedFilters.dateFrom);
       filtered = filtered.filter(drop => {
-        if (!drop) return false;
-        return (
-          drop.name?.toLowerCase().includes(term) ||
-          drop.description?.toLowerCase().includes(term) ||
-          drop.badge?.toLowerCase().includes(term) ||
-          drop.flavorTag?.toLowerCase().includes(term) ||
-          (Array.isArray(drop.variants) && drop.variants.some((v: any) => v?.label?.toLowerCase().includes(term)))
-        );
+        const dropDate = new Date(drop.createdAt || 0);
+        return dropDate >= dateFrom;
+      });
+    }
+    if (advancedFilters.dateTo) {
+      const dateTo = new Date(advancedFilters.dateTo);
+      dateTo.setHours(23, 59, 59, 999); // End of day
+      filtered = filtered.filter(drop => {
+        const dropDate = new Date(drop.createdAt || 0);
+        return dropDate <= dateTo;
       });
     }
 
-    // Status filter (multi-select)
-    if (Array.isArray(filterStatus) && filterStatus.length > 0) {
-      filtered = filtered.filter(drop => drop && drop.status && filterStatus.includes(drop.status));
+    // Price filter (using variants)
+    if (advancedFilters.priceMin !== undefined) {
+      filtered = filtered.filter(drop => {
+        if (!Array.isArray(drop.variants) || drop.variants.length === 0) return false;
+        const minPrice = Math.min(...drop.variants.map((v: any) => v.basePrice || 0).filter((p: number) => p > 0));
+        return minPrice >= advancedFilters.priceMin!;
+      });
+    }
+    if (advancedFilters.priceMax !== undefined) {
+      filtered = filtered.filter(drop => {
+        if (!Array.isArray(drop.variants) || drop.variants.length === 0) return false;
+        const maxPrice = Math.max(...drop.variants.map((v: any) => v.basePrice || 0).filter((p: number) => p > 0));
+        return maxPrice <= advancedFilters.priceMax!;
+      });
     }
 
-    // Access filter (multi-select)
-    if (Array.isArray(filterAccess) && filterAccess.length > 0) {
-      filtered = filtered.filter(drop => drop && drop.access && filterAccess.includes(drop.access));
+    // Stock filter
+    if (advancedFilters.stockMin !== undefined) {
+      filtered = filtered.filter(drop => (drop.totalStock || 0) >= advancedFilters.stockMin!);
+    }
+    if (advancedFilters.stockMax !== undefined) {
+      filtered = filtered.filter(drop => (drop.totalStock || 0) <= advancedFilters.stockMax!);
+    }
+    if (advancedFilters.stockLevel && advancedFilters.stockLevel !== 'all') {
+      filtered = filtered.filter(drop => {
+        const stock = drop.totalStock || 0;
+        switch (advancedFilters.stockLevel) {
+          case 'low':
+            return stock > 0 && stock < 20;
+          case 'out':
+            return stock === 0;
+          case 'in_stock':
+            return stock > 0;
+          default:
+            return true;
+        }
+      });
     }
 
-    // Sort drops
-    filtered.sort((a, b) => {
+    return filtered;
+  }, [accessFilteredDrops, advancedFilters]);
+
+  // Sort comparator - memoized separately
+  const sortComparator = useMemo(() => {
+    return (a: any, b: any) => {
       let aValue: any, bValue: any;
       
       switch (sortBy) {
@@ -300,16 +448,34 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
       if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
       if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
       return 0;
-    });
+    };
+  }, [sortBy, sortOrder]);
 
-    return filtered;
-  }, [processedDrops, searchTerm, filterStatus, filterAccess, sortBy, sortOrder]);
+  // Final filtered and sorted drops - combines all filters and sorting
+  const filteredDrops = useMemo(() => {
+    if (!Array.isArray(advancedFilteredDrops) || advancedFilteredDrops.length === 0) {
+      return [];
+    }
+    
+    // Create a copy to avoid mutating the original array
+    const sorted = [...advancedFilteredDrops];
+    sorted.sort(sortComparator);
+    return sorted;
+  }, [advancedFilteredDrops, sortComparator]);
   
-  // Paginated drops
+  // Paginated drops - return all for virtual scrolling, otherwise paginate
   const paginatedDrops = useMemo(() => {
+    if (useVirtualScrolling && viewMode === 'grid') {
+      // Return all drops for virtual scrolling
+      return filteredDrops;
+    }
+    if (useVirtualTableScrolling && viewMode === 'list') {
+      // Return all drops for virtual table scrolling
+      return filteredDrops;
+    }
     const start = (page - 1) * itemsPerPage;
     return filteredDrops.slice(start, start + itemsPerPage);
-  }, [filteredDrops, page, itemsPerPage]);
+  }, [filteredDrops, page, itemsPerPage, viewMode, useVirtualScrolling, useVirtualTableScrolling]);
   
   const totalPages = Math.ceil(filteredDrops.length / itemsPerPage);
   
@@ -329,7 +495,7 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
     }
   }, [filteredDrops]);
 
-  const handleBulkAction = useCallback(async (action: string) => {
+  const handleBulkAction = useCallback(async (action: string, options?: { status?: string; access?: string }) => {
     if (selectedDrops.size === 0) {
       logger.warn('No drops selected for bulk action');
       return;
@@ -353,13 +519,9 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
 
         // Add additional data based on action
         if (action === 'status_change') {
-          // For status change, we need to determine the target status
-          // This could be improved with a dialog to select status
-          actionData.status = 'active';
+          actionData.status = options?.status || 'active';
         } else if (action === 'access_change') {
-          // For access change, we need to determine the target access
-          // This could be improved with a dialog to select access
-          actionData.access = 'standard';
+          actionData.access = options?.access || 'standard';
         }
 
         const result = await bulkActionMutation.mutateAsync(actionData);
@@ -368,8 +530,8 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
         // Clear selection after successful action
         setSelectedDrops(new Set());
         
-        // Refetch drops to get updated data
-        refetchDrops();
+        // Invalidate queries instead of refetch for bulk operations
+        queryClient.invalidateQueries({ queryKey: ['drops', 'list'] });
         
         // Show success toast
         const actionLabels: Record<string, string> = {
@@ -388,7 +550,7 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
       handleError(error, { operation: 'bulk_action', action, dropIds });
       toast.error('Fehler bei Bulk-Aktion', 'Die Aktion konnte nicht ausgeführt werden.');
     }
-  }, [selectedDrops, bulkActionMutation, measureAsync, handleError, refetchDrops, toast]);
+  }, [selectedDrops, bulkActionMutation, measureAsync, handleError, queryClient, toast]);
 
   const handleDuplicateDrop = useCallback(async (drop: any) => {
     try {
@@ -403,7 +565,8 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
         
         await createDropMutation.mutateAsync(duplicatedDrop);
         logger.logUserAction('drop_duplicated', { originalDropId: drop.id });
-        refetchDrops();
+        // Invalidate to refetch with new drop
+        queryClient.invalidateQueries({ queryKey: ['drops', 'list'] });
         toast.success('Drop dupliziert', 'Der Drop wurde erfolgreich dupliziert.');
       });
     } catch (error) {
@@ -429,7 +592,8 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
           newSet.delete(dropId);
           return newSet;
         });
-        refetchDrops();
+        // Invalidate queries for delete operations
+        queryClient.invalidateQueries({ queryKey: ['drops', 'list'] });
         toast.success('Drop gelöscht', 'Der Drop wurde erfolgreich gelöscht.');
       });
     } catch (error) {
@@ -438,7 +602,9 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
     }
   }, [bulkActionMutation, measureAsync, handleError, refetchDrops, toast]);
 
-  // Keyboard Shortcuts - ensure array is safe
+  // Enhanced Keyboard Shortcuts
+  const [selectedDropIndex, setSelectedDropIndex] = useState<number | null>(null);
+  
   const dropShortcuts = React.useMemo(() => [
     {
       key: 'n',
@@ -469,12 +635,39 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
       description: 'Alle Drops auswählen'
     },
     {
+      key: 'e',
+      ctrl: true,
+      meta: true,
+      handler: () => {
+        try {
+          if (selectedDrops.size === 1) {
+            const selectedId = Array.from(selectedDrops)[0];
+            const drop = filteredDrops.find(d => d.id === selectedId);
+            if (drop) {
+              setSelectedDropForEdit(drop);
+            }
+          } else if (selectedDropIndex !== null && filteredDrops[selectedDropIndex]) {
+            setSelectedDropForEdit(filteredDrops[selectedDropIndex]);
+          }
+        } catch (error) {
+          console.error('Error in keyboard shortcut handler:', error);
+        }
+      },
+      description: 'Ausgewählten Drop bearbeiten'
+    },
+    {
       key: 'd',
       ctrl: true,
       meta: true,
       handler: () => {
         try {
-          if (selectedDrops.size > 0) {
+          if (selectedDrops.size === 1) {
+            const selectedId = Array.from(selectedDrops)[0];
+            const drop = filteredDrops.find(d => d.id === selectedId);
+            if (drop) {
+              handleDuplicateDrop(drop);
+            }
+          } else if (selectedDrops.size > 0) {
             if (confirm(`Möchtest du wirklich ${selectedDrops.size} Drop(s) löschen?`)) {
               handleBulkAction('delete');
             }
@@ -483,7 +676,55 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
           console.error('Error in keyboard shortcut handler:', error);
         }
       },
-      description: 'Ausgewählte Drops löschen'
+      description: selectedDrops.size === 1 ? 'Drop duplizieren' : 'Ausgewählte Drops löschen'
+    },
+    {
+      key: 's',
+      ctrl: true,
+      meta: true,
+      handler: () => {
+        try {
+          // Save changes - if editing
+          if (selectedDropForEdit) {
+            toast.info('Speichern', 'Änderungen werden gespeichert...');
+          }
+        } catch (error) {
+          console.error('Error in keyboard shortcut handler:', error);
+        }
+      },
+      description: 'Änderungen speichern'
+    },
+    {
+      key: 'ArrowDown',
+      ctrl: false,
+      meta: false,
+      handler: () => {
+        try {
+          if (selectedDropIndex === null) {
+            setSelectedDropIndex(0);
+          } else if (selectedDropIndex < filteredDrops.length - 1) {
+            setSelectedDropIndex(selectedDropIndex + 1);
+          }
+        } catch (error) {
+          console.error('Error in keyboard shortcut handler:', error);
+        }
+      },
+      description: 'Zum nächsten Drop navigieren'
+    },
+    {
+      key: 'ArrowUp',
+      ctrl: false,
+      meta: false,
+      handler: () => {
+        try {
+          if (selectedDropIndex !== null && selectedDropIndex > 0) {
+            setSelectedDropIndex(selectedDropIndex - 1);
+          }
+        } catch (error) {
+          console.error('Error in keyboard shortcut handler:', error);
+        }
+      },
+      description: 'Zum vorherigen Drop navigieren'
     },
     {
       key: 'Escape',
@@ -494,6 +735,7 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
           setSelectedDropForEdit(null);
           setSelectedDropForStockUpdate(null);
           setShowShortcutsHelp(false);
+          setSelectedDropIndex(null);
         } catch (error) {
           console.error('Error in keyboard shortcut handler:', error);
         }
@@ -507,13 +749,26 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
       handler: () => {
         try {
           // Focus search input
-          const searchInput = document.querySelector('input[type="search"], input[placeholder*="Suche"]') as HTMLInputElement;
+          const searchInput = document.querySelector('input[type="search"], input[placeholder*="Suche"], input[placeholder*="Drops"]') as HTMLInputElement;
           searchInput?.focus();
         } catch (error) {
           console.error('Error in keyboard shortcut handler:', error);
         }
       },
       description: 'Suche fokussieren'
+    },
+    {
+      key: '/',
+      ctrl: true,
+      meta: true,
+      handler: () => {
+        try {
+          setShowShortcutsHelp(!showShortcutsHelp);
+        } catch (error) {
+          console.error('Error in keyboard shortcut handler:', error);
+        }
+      },
+      description: 'Keyboard Shortcuts Hilfe anzeigen'
     },
     {
       key: '?',
@@ -541,7 +796,7 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
       },
       description: 'Keyboard Shortcuts Hilfe anzeigen'
     }
-  ].filter(shortcut => shortcut && shortcut.key && shortcut.handler), [selectedDrops, handleSelectAll, handleBulkAction, filteredDrops.length]);
+  ].filter(shortcut => shortcut && shortcut.key && shortcut.handler), [selectedDrops, handleSelectAll, handleBulkAction, handleDuplicateDrop, filteredDrops, selectedDropIndex, selectedDropForEdit]);
   
   useKeyboardShortcuts(dropShortcuts, { enabled: true });
 
@@ -563,50 +818,97 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
   const handleDropUpdate = useCallback(async (dropId: string, field: string, value: any) => {
     await measureAsync('drop_update', async () => {
       logger.logUserAction('drop_updated', { dropId, field, value });
+      
+      // Optimistic update
+      const previousData = queryClient.getQueryData(queryKeys.drops.list({
+        search: debouncedSearchTerm,
+        status: filterStatus !== 'all' ? filterStatus : undefined,
+        limit: 100
+      }));
+      
+      queryClient.setQueryData(
+        queryKeys.drops.list({
+          search: debouncedSearchTerm,
+          status: filterStatus !== 'all' ? filterStatus : undefined,
+          limit: 100
+        }),
+        (old: any) => {
+          if (!old?.data) return old;
+          const data = Array.isArray(old.data) ? old.data : (old.data?.data || []);
+          return {
+            ...old,
+            data: data.map((d: any) => d && d.id === dropId ? { ...d, [field]: value } : d)
+          };
+        }
+      );
+      
       try {
         await updateDropMutation.mutateAsync({
           id: dropId,
           data: { [field]: value }
         });
-        refetchDrops();
+        // Only refetch for critical fields like stock
+        if (field === 'totalStock' || field === 'variants') {
+          refetchDrops();
+        }
         toast.success('Drop aktualisiert', `Das Feld "${field}" wurde erfolgreich aktualisiert.`);
       } catch (error) {
+        // Rollback on error
+        queryClient.setQueryData(
+          queryKeys.drops.list({
+            search: debouncedSearchTerm,
+            status: filterStatus !== 'all' ? filterStatus : undefined,
+            limit: 100
+          }),
+          previousData
+        );
         handleError(error, { operation: 'drop_update', dropId, field });
         toast.error('Fehler beim Aktualisieren', 'Der Drop konnte nicht aktualisiert werden.');
       }
     });
-  }, [measureAsync, updateDropMutation, refetchDrops, handleError, toast]);
+  }, [measureAsync, updateDropMutation, queryClient, debouncedSearchTerm, filterStatus, refetchDrops, handleError, toast]);
 
-  // Drag & Drop handlers with enhanced visual feedback
-  const handleDragStart = useCallback((e: React.DragEvent, dropId: string) => {
+  // Enhanced Drag & Drop handlers with better visual feedback and touch support
+  const handleDragStart = useCallback((e: React.DragEvent | React.TouchEvent, dropId: string) => {
     setDraggedDropId(dropId);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', dropId);
     
-    // Create custom drag image
-    const dragImage = document.createElement('div');
-    dragImage.style.position = 'absolute';
-    dragImage.style.top = '-1000px';
-    dragImage.style.padding = '8px';
-    dragImage.style.background = 'rgba(139, 92, 246, 0.95)';
-    dragImage.style.border = '2px solid rgba(167, 139, 250, 0.8)';
-    dragImage.style.borderRadius = '8px';
-    dragImage.style.color = 'white';
-    dragImage.style.fontSize = '14px';
-    dragImage.style.backdropFilter = 'blur(10px)';
-    dragImage.textContent = 'Drop wird verschoben...';
-    document.body.appendChild(dragImage);
-    e.dataTransfer.setDragImage(dragImage, 0, 0);
-    
-    // Clean up after a short delay
-    setTimeout(() => {
-      document.body.removeChild(dragImage);
-    }, 0);
+    // Handle both mouse and touch events
+    if ('dataTransfer' in e) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', dropId);
+      
+      // Create enhanced custom drag image
+      const dragImage = document.createElement('div');
+      dragImage.style.position = 'absolute';
+      dragImage.style.top = '-1000px';
+      dragImage.style.padding = '12px 16px';
+      dragImage.style.background = 'linear-gradient(135deg, rgba(139, 92, 246, 0.95), rgba(167, 139, 250, 0.95))';
+      dragImage.style.border = '2px solid rgba(167, 139, 250, 0.8)';
+      dragImage.style.borderRadius = '12px';
+      dragImage.style.color = 'white';
+      dragImage.style.fontSize = '14px';
+      dragImage.style.fontWeight = '600';
+      dragImage.style.backdropFilter = 'blur(10px)';
+      dragImage.style.boxShadow = '0 8px 32px rgba(139, 92, 246, 0.4)';
+      dragImage.style.transform = 'rotate(-2deg)';
+      dragImage.textContent = 'Drop wird verschoben...';
+      document.body.appendChild(dragImage);
+      e.dataTransfer.setDragImage(dragImage, 0, 0);
+      
+      // Clean up after a short delay
+      setTimeout(() => {
+        if (document.body.contains(dragImage)) {
+          document.body.removeChild(dragImage);
+        }
+      }, 0);
+    }
   }, []);
 
-  const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
+  const handleDragOver = useCallback((e: React.DragEvent | React.TouchEvent, index: number) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+    if ('dataTransfer' in e) {
+      e.dataTransfer.dropEffect = 'move';
+    }
     setDragOverIndex(index);
   }, []);
 
@@ -617,7 +919,7 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
     }, 50);
   }, []);
 
-  const handleDrop = useCallback(async (e: React.DragEvent, targetIndex: number) => {
+  const handleDrop = useCallback(async (e: React.DragEvent | React.TouchEvent, targetIndex: number) => {
     e.preventDefault();
     setDragOverIndex(null);
     
@@ -647,7 +949,22 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
           fromIndex: draggedIndex, 
           toIndex: targetIndex 
         });
-        refetchDrops();
+        // Update cache optimistically for reorder
+        queryClient.setQueryData(
+          queryKeys.drops.list({
+            search: debouncedSearchTerm,
+            status: filterStatus !== 'all' ? filterStatus : undefined,
+            limit: 100
+          }),
+          (old: any) => {
+            if (!old?.data) return old;
+            const data = Array.isArray(old.data) ? old.data : (old.data?.data || []);
+            return {
+              ...old,
+              data: reordered
+            };
+          }
+        );
         toast.success('Reihenfolge aktualisiert', 'Die Drop-Reihenfolge wurde erfolgreich gespeichert.');
       });
     } catch (error) {
@@ -658,50 +975,9 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
     }
 
     setDraggedDropId(null);
-  }, [draggedDropId, filteredDrops, reorderDropsMutation, measureAsync, handleError, refetchDrops, toast]);
+  }, [draggedDropId, filteredDrops, reorderDropsMutation, measureAsync, handleError, queryClient, debouncedSearchTerm, filterStatus, refetchDrops, toast]);
 
-  const getStatusBadge = (drop: any) => {
-    switch (drop.status) {
-      case 'active':
-        return <Badge variant="success" className="text-green-400">Live</Badge>;
-      case 'scheduled':
-        return <Badge variant="warning" className="text-yellow-400">Scheduled</Badge>;
-      case 'sold_out':
-        return <Badge variant="destructive" className="text-red-400">Sold Out</Badge>;
-      case 'inactive':
-        return <Badge variant="outline" className="text-gray-400">Inactive</Badge>;
-      default:
-        return <Badge variant="outline" className="text-gray-400">Unknown</Badge>;
-    }
-  };
-
-  const getAccessBadge = (access: string) => {
-    switch (access) {
-      case 'free':
-        return <Badge variant="outline" className="text-green-400 border-green-400">Free</Badge>;
-      case 'limited':
-        return <Badge variant="outline" className="text-yellow-400 border-yellow-400">Limited</Badge>;
-      case 'vip':
-        return <Badge variant="outline" className="text-purple-400 border-purple-400"><Crown className="w-3 h-3 mr-1" />VIP</Badge>;
-      case 'standard':
-        return <Badge variant="outline" className="text-blue-400 border-blue-400">Standard</Badge>;
-      default:
-        return <Badge variant="outline" className="text-gray-400">Unknown</Badge>;
-    }
-  };
-
-  const getPriorityBadge = (drop: any) => {
-    if (drop.isHighDemand) {
-      return <Badge variant="outline" className="text-red-400 border-red-400"><Flame className="w-3 h-3 mr-1" />High Demand</Badge>;
-    }
-    if (drop.isEndingSoon) {
-      return <Badge variant="outline" className="text-orange-400 border-orange-400"><Timer className="w-3 h-3 mr-1" />Ending Soon</Badge>;
-    }
-    if (drop.isHighRevenue) {
-      return <Badge variant="outline" className="text-green-400 border-green-400"><TrendingUp className="w-3 h-3 mr-1" />High Revenue</Badge>;
-    }
-    return null;
-  };
+  // Badge functions are now imported from dropBadges.tsx for better memoization
 
   // Error handling
   if (dropsError) {
@@ -800,7 +1076,60 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
           )}
         </div>
 
-        {/* Modern Filter UI with Chips */}
+        {/* Advanced Filters Component */}
+        <DropFiltersComponent
+          filters={advancedFilters}
+          onFiltersChange={(newFilters) => {
+            setAdvancedFilters(newFilters);
+            // Sync with simple filters
+            if (newFilters.status) setFilterStatus(newFilters.status);
+            if (newFilters.access) setFilterAccess(newFilters.access);
+          }}
+          onReset={() => {
+            setAdvancedFilters({
+              status: [],
+              access: [],
+              stockLevel: 'all',
+            });
+            setFilterStatus([]);
+            setFilterAccess([]);
+          }}
+          onSavePreset={(name, filters) => {
+            // Save preset to localStorage
+            try {
+              const presets = JSON.parse(localStorage.getItem('drop-filter-presets') || '[]');
+              presets.push({ id: Date.now().toString(), name, filters });
+              localStorage.setItem('drop-filter-presets', JSON.stringify(presets));
+              toast.success('Filter gespeichert', `Filter "${name}" wurde gespeichert.`);
+            } catch (error) {
+              console.warn('Failed to save preset:', error);
+            }
+          }}
+          onLoadPreset={(filters) => {
+            setAdvancedFilters(filters);
+            if (filters.status) setFilterStatus(filters.status);
+            if (filters.access) setFilterAccess(filters.access);
+          }}
+          onDeletePreset={(presetId) => {
+            try {
+              const presets = JSON.parse(localStorage.getItem('drop-filter-presets') || '[]');
+              const filtered = presets.filter((p: any) => p.id !== presetId);
+              localStorage.setItem('drop-filter-presets', JSON.stringify(filtered));
+              toast.info('Filter gelöscht', 'Der Filter wurde gelöscht.');
+            } catch (error) {
+              console.warn('Failed to delete preset:', error);
+            }
+          }}
+          presets={(() => {
+            try {
+              return JSON.parse(localStorage.getItem('drop-filter-presets') || '[]');
+            } catch {
+              return [];
+            }
+          })()}
+        />
+
+        {/* Modern Filter UI with Chips - Legacy (can be removed later) */}
         <div className="space-y-4">
           {/* Active Filters Display */}
           {(filterStatus.length > 0 || filterAccess.length > 0) && (
@@ -1063,40 +1392,67 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
           </div>
         )}
 
-        {/* Drops Grid - Optimized with pagination and responsive design */}
+        {/* Drops Grid - Optimized with virtual scrolling and pagination */}
         {!dropsLoading && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4 touch-pan-y">
-            <AnimatePresence mode="popLayout">
-              {paginatedDrops.map((drop, index) => (
-                <DropCard
-                  key={drop.id}
-                  drop={drop}
-                  isSelected={selectedDrops.has(drop.id)}
-                  index={index}
-                  onSelect={(checked) => handleDropSelect(drop.id, checked)}
-                  onEdit={() => setSelectedDropForEdit(drop)}
-                  onDelete={() => handleDeleteDrop(drop.id, drop.name)}
-                  onDuplicate={() => handleDuplicateDrop(drop)}
-                  onDetails={() => setSelectedDropForDetails(drop)}
-                  onStockUpdate={() => setSelectedDropForStockUpdate(drop)}
-                  onUpdate={(field, value) => handleDropUpdate(drop.id, field, value)}
-                  onDragStart={handleDragStart}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  isDragging={draggedDropId === drop.id}
-                  isDragOver={dragOverIndex === index}
-                  getStatusBadge={getStatusBadge}
-                  getAccessBadge={getAccessBadge}
-                  getPriorityBadge={getPriorityBadge}
-                />
-              ))}
-            </AnimatePresence>
+          <div ref={containerRef}>
+            {useVirtualScrolling ? (
+              <VirtualizedDropGrid
+                drops={paginatedDrops}
+                selectedDrops={selectedDrops}
+                onSelect={handleDropSelect}
+                onEdit={(drop) => setSelectedDropForEdit(drop)}
+                onDelete={handleDeleteDrop}
+                onDuplicate={handleDuplicateDrop}
+                onDetails={(drop) => setSelectedDropForDetails(drop)}
+                onStockUpdate={(drop) => setSelectedDropForStockUpdate(drop)}
+                onUpdate={handleDropUpdate}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                draggedDropId={draggedDropId}
+                dragOverIndex={dragOverIndex}
+                getStatusBadge={getStatusBadge}
+                getAccessBadge={getAccessBadge}
+                getPriorityBadge={getPriorityBadge}
+                containerWidth={containerDimensions.width}
+                containerHeight={containerDimensions.height}
+              />
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4 touch-pan-y">
+                <AnimatePresence mode="popLayout">
+                  {paginatedDrops.map((drop, index) => (
+                    <DropCard
+                      key={drop.id}
+                      drop={drop}
+                      isSelected={selectedDrops.has(drop.id)}
+                      index={index}
+                      onSelect={(checked) => handleDropSelect(drop.id, checked)}
+                      onEdit={() => setSelectedDropForEdit(drop)}
+                      onDelete={() => handleDeleteDrop(drop.id, drop.name)}
+                      onDuplicate={() => handleDuplicateDrop(drop)}
+                      onDetails={() => setSelectedDropForDetails(drop)}
+                      onStockUpdate={() => setSelectedDropForStockUpdate(drop)}
+                      onUpdate={(field, value) => handleDropUpdate(drop.id, field, value)}
+                      onDragStart={handleDragStart}
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      isDragging={draggedDropId === drop.id}
+                      isDragOver={dragOverIndex === index}
+                      getStatusBadge={getStatusBadge}
+                      getAccessBadge={getAccessBadge}
+                      getPriorityBadge={getPriorityBadge}
+                    />
+                  ))}
+                </AnimatePresence>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Pagination Controls for Grid */}
-        {filteredDrops.length > itemsPerPage && (
+        {/* Pagination Controls for Grid - Only show if not using virtual scrolling */}
+        {!useVirtualScrolling && filteredDrops.length > itemsPerPage && (
           <div className="flex items-center justify-between mt-6">
             <div className="text-sm text-muted-foreground">
               Zeige {((page - 1) * itemsPerPage) + 1} - {Math.min(page * itemsPerPage, filteredDrops.length)} von {filteredDrops.length} Drops
@@ -1361,29 +1717,242 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
       {/* Drops Table */}
       <Card>
         <div className="overflow-x-auto -mx-4 md:mx-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12">
-                  <input
-                    type="checkbox"
-                    checked={selectedDrops.size === filteredDrops.length && filteredDrops.length > 0}
-                    onChange={(e) => handleSelectAll(e.target.checked)}
-                    className="rounded border-white/20 bg-black/25"
-                  />
-                </TableHead>
-                <TableHead>Drop</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Zugriff</TableHead>
-                <TableHead>Bestand</TableHead>
-                <TableHead>Verkauft</TableHead>
-                <TableHead>Umsatz</TableHead>
-                <TableHead>Interesse</TableHead>
-                <TableHead className="w-12">Aktionen</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedDrops.map((drop, index) => (
+          {useVirtualTableScrolling ? (
+            <div className="relative" style={{ height: containerDimensions.height }}>
+              <Table>
+                <TableHeader className="sticky top-0 z-10 bg-background">
+                  <TableRow>
+                    <TableHead className="w-12">
+                      <input
+                        type="checkbox"
+                        checked={selectedDrops.size === filteredDrops.length && filteredDrops.length > 0}
+                        onChange={(e) => handleSelectAll(e.target.checked)}
+                        className="rounded border-white/20 bg-black/25"
+                      />
+                    </TableHead>
+                    <TableHead>Drop</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Zugriff</TableHead>
+                    <TableHead>Bestand</TableHead>
+                    <TableHead>Verkauft</TableHead>
+                    <TableHead>Umsatz</TableHead>
+                    <TableHead>Interesse</TableHead>
+                    <TableHead className="w-12">Aktionen</TableHead>
+                  </TableRow>
+                </TableHeader>
+              </Table>
+              <div className="overflow-auto" style={{ height: containerDimensions.height - 60 }}>
+                <VirtualizedList
+                  items={paginatedDrops}
+                  renderItem={(drop, index) => (
+                    <div key={drop.id} className="border-b border-white/10">
+                      <Table>
+                        <TableBody>
+                          <TableRow 
+                            className={cn(
+                              "hover:bg-white/5 transition-colors",
+                              draggedDropId === drop.id && "opacity-50",
+                              dragOverIndex === index && "bg-purple-500/20 border-purple-500"
+                            )}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, drop.id)}
+                            onDragOver={(e) => handleDragOver(e, index)}
+                            onDragLeave={handleDragLeave}
+                            onDrop={(e) => handleDrop(e, index)}
+                          >
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div 
+                          className="cursor-move text-muted-foreground hover:text-purple-400 transition-colors"
+                          draggable
+                          onDragStart={(e) => {
+                            e.stopPropagation();
+                            handleDragStart(e, drop.id);
+                          }}
+                        >
+                          <GripVertical className="w-4 h-4" />
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={selectedDrops.has(drop.id)}
+                          onChange={(e) => handleDropSelect(drop.id, e.target.checked)}
+                          className="rounded border-white/20 bg-black/25"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Zap className="w-5 h-5 text-purple-400" />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium mb-1">
+                            <InlineEdit
+                              value={drop.name}
+                              onSave={(newName) => handleDropUpdate(drop.id, 'name', newName)}
+                              className="font-medium"
+                              validate={(val) => val.length < 2 ? 'Name muss mindestens 2 Zeichen lang sein' : null}
+                            />
+                          </div>
+                          <div className="text-sm text-muted-foreground mb-1">
+                            <InlineEdit
+                              value={drop.description || ''}
+                              onSave={(newDesc) => handleDropUpdate(drop.id, 'description', newDesc)}
+                              type="textarea"
+                              rows={2}
+                              className="text-sm text-muted-foreground"
+                              placeholder="Beschreibung hinzufügen..."
+                            />
+                          </div>
+                          {drop.badge && (
+                            <div className="mt-1">
+                              <InlineEdit
+                                value={drop.badge}
+                                onSave={(newBadge) => handleDropUpdate(drop.id, 'badge', newBadge)}
+                                type="text"
+                                className="text-xs"
+                                placeholder="Badge..."
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <InlineEdit
+                        value={drop.status || 'active'}
+                        onSave={(newStatus) => handleDropUpdate(drop.id, 'status', newStatus)}
+                        type="select"
+                        options={[
+                          { value: 'active', label: 'Aktiv' },
+                          { value: 'inactive', label: 'Inaktiv' },
+                          { value: 'scheduled', label: 'Geplant' },
+                          { value: 'sold_out', label: 'Ausverkauft' }
+                        ]}
+                        className="min-w-[100px]"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <InlineEdit
+                        value={drop.access || 'standard'}
+                        onSave={(newAccess) => handleDropUpdate(drop.id, 'access', newAccess)}
+                        type="select"
+                        options={[
+                          { value: 'free', label: 'Kostenlos' },
+                          { value: 'limited', label: 'Limitiert' },
+                          { value: 'vip', label: 'VIP' },
+                          { value: 'standard', label: 'Standard' }
+                        ]}
+                        className="min-w-[100px]"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-center">
+                        <div className="font-semibold text-neon">{drop.totalStock || 0}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {Array.isArray(drop.variants) ? drop.variants.length : 0} Varianten
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="font-semibold text-green-400">{drop.soldCount || 0}</div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="font-semibold text-green-400">€{(drop.revenue || 0).toLocaleString()}</div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-center">
+                        <div className="font-semibold text-blue-400">{drop.interestCount || 0}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {(drop.conversionRate || 0).toFixed(1)}% Konv.
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreHorizontal className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                          <DropdownMenuItem onClick={() => setSelectedDropForDetails(drop)}>
+                            <Eye className="w-4 h-4 mr-2" />
+                            Details anzeigen
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setSelectedDropForEdit(drop)}>
+                            <Edit className="w-4 h-4 mr-2" />
+                            Drop bearbeiten
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleDuplicateDrop(drop)}>
+                            <Copy className="w-4 h-4 mr-2" />
+                            Duplizieren
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleDropUpdate(drop.id, 'status', drop.status === 'active' ? 'inactive' : 'active')}>
+                            <CheckCircle className="w-4 h-4 mr-2" />
+                            Status umschalten
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => {
+                            const newAccess = drop.access === 'free' ? 'limited' : drop.access === 'limited' ? 'vip' : drop.access === 'vip' ? 'standard' : 'free';
+                            handleDropUpdate(drop.id, 'access', newAccess);
+                          }}>
+                            <Lock className="w-4 h-4 mr-2" />
+                            Zugriff ändern
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setSelectedDropForStockUpdate(drop)}>
+                            <Package className="w-4 h-4 mr-2" />
+                            Bestand aktualisieren
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            className="text-red-400"
+                            onClick={() => {
+                              if (confirm(`Möchtest du "${drop.name}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`)) {
+                                handleBulkAction('delete');
+                              }
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Löschen
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                  )}
+                  itemHeight={120}
+                  containerHeight={containerDimensions.height - 60}
+                  overscan={5}
+                  keyExtractor={(drop) => drop.id}
+                  emptyMessage="Keine Drops gefunden"
+                />
+              </div>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-12">
+                    <input
+                      type="checkbox"
+                      checked={selectedDrops.size === filteredDrops.length && filteredDrops.length > 0}
+                      onChange={(e) => handleSelectAll(e.target.checked)}
+                      className="rounded border-white/20 bg-black/25"
+                    />
+                  </TableHead>
+                  <TableHead>Drop</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Zugriff</TableHead>
+                  <TableHead>Bestand</TableHead>
+                  <TableHead>Verkauft</TableHead>
+                  <TableHead>Umsatz</TableHead>
+                  <TableHead>Interesse</TableHead>
+                  <TableHead className="w-12">Aktionen</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedDrops.map((drop, index) => (
                 <TableRow 
                   key={drop.id} 
                   className={cn(
@@ -1557,10 +2126,11 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
               ))}
             </TableBody>
           </Table>
+          )}
         </div>
 
-        {/* Pagination Controls for Table */}
-        {filteredDrops.length > itemsPerPage && (
+        {/* Pagination Controls for Table - Only show if not using virtual scrolling */}
+        {!useVirtualTableScrolling && filteredDrops.length > itemsPerPage && (
           <div className="flex items-center justify-between mt-4 px-4 py-3 border-t border-white/10">
             <div className="text-sm text-muted-foreground">
               Zeige {((page - 1) * itemsPerPage) + 1} - {Math.min(page * itemsPerPage, filteredDrops.length)} von {filteredDrops.length} Drops
@@ -1604,44 +2174,68 @@ export function DropManagement({ viewMode, searchTerm }: DropManagementProps) {
         )}
       </Card>
 
-      {/* Modals with Suspense for code splitting */}
-      {selectedDropForDetails && (
-        <Suspense fallback={<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-500"></div></div>}>
-          <DropDetailsModal
-            isOpen={!!selectedDropForDetails}
-            onClose={() => setSelectedDropForDetails(null)}
-            drop={selectedDropForDetails}
-          />
-        </Suspense>
-      )}
+      {/* Keyboard Shortcuts Help Modal */}
+      <KeyboardShortcutsHelp
+        isOpen={showShortcutsHelp}
+        onClose={() => setShowShortcutsHelp(false)}
+        shortcuts={dropShortcuts.map(s => ({
+          key: s.key,
+          ctrl: s.ctrl,
+          meta: s.meta,
+          description: s.description
+        }))}
+      />
 
-      {selectedDropForEdit && (
-        <Suspense fallback={<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-500"></div></div>}>
-          <EditDropModal
-            isOpen={!!selectedDropForEdit}
-            onClose={() => setSelectedDropForEdit(null)}
-            drop={selectedDropForEdit}
-            onSuccess={() => {
-              refetchDrops();
-              setSelectedDropForEdit(null);
-            }}
-          />
-        </Suspense>
-      )}
+      {/* Optimized Suspense fallback - lighter component */}
+      {(() => {
+        const ModalFallback = () => (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        );
 
-      {selectedDropForStockUpdate && (
-        <Suspense fallback={<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-500"></div></div>}>
-          <StockUpdateModal
-            isOpen={!!selectedDropForStockUpdate}
-            onClose={() => setSelectedDropForStockUpdate(null)}
-            drop={selectedDropForStockUpdate}
-            onSave={(variants) => {
-              handleDropUpdate(selectedDropForStockUpdate.id, 'variants', variants);
-              setSelectedDropForStockUpdate(null);
-            }}
-          />
-        </Suspense>
-      )}
+        return (
+          <>
+            {selectedDropForDetails && (
+              <Suspense fallback={<ModalFallback />}>
+                <DropDetailsModal
+                  isOpen={!!selectedDropForDetails}
+                  onClose={() => setSelectedDropForDetails(null)}
+                  drop={selectedDropForDetails}
+                />
+              </Suspense>
+            )}
+
+            {selectedDropForEdit && (
+              <Suspense fallback={<ModalFallback />}>
+                <EditDropModal
+                  isOpen={!!selectedDropForEdit}
+                  onClose={() => setSelectedDropForEdit(null)}
+                  drop={selectedDropForEdit}
+                  onSuccess={() => {
+                    refetchDrops();
+                    setSelectedDropForEdit(null);
+                  }}
+                />
+              </Suspense>
+            )}
+
+            {selectedDropForStockUpdate && (
+              <Suspense fallback={<ModalFallback />}>
+                <StockUpdateModal
+                  isOpen={!!selectedDropForStockUpdate}
+                  onClose={() => setSelectedDropForStockUpdate(null)}
+                  drop={selectedDropForStockUpdate}
+                  onSave={(variants) => {
+                    handleDropUpdate(selectedDropForStockUpdate.id, 'variants', variants);
+                    setSelectedDropForStockUpdate(null);
+                  }}
+                />
+              </Suspense>
+            )}
+          </>
+        );
+      })()}
     </div>
   );
 }

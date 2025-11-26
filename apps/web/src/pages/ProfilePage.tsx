@@ -96,12 +96,17 @@ import { useToastStore } from "../store/toast";
 import { useNavigate } from "react-router-dom";
 import { useTelegramProfile } from "../hooks/useTelegramProfile";
 import { useDisplayName } from "../hooks/useDisplayName";
+import { NotificationSettings } from "../components/profile/NotificationSettings";
 
 // Lazy load components for better performance
 const ProfileSkeleton = lazy(() => import("../components/skeletons/HomePageSkeleton").then(module => ({ default: module.HomePageSkeleton })));
 const TicketsSectionLazy = lazy(() => import("../components/profile/TicketsSection").then(module => ({ default: module.TicketsSection })));
 const OrdersSectionLazy = lazy(() => import("../components/profile/OrdersSection").then(module => ({ default: module.OrdersSection })));
 const InterestsSectionLazy = lazy(() => import("../components/profile/InterestsSection").then(module => ({ default: module.InterestsSection })));
+const ProfileHeaderLazy = lazy(() => import("../components/profile/ProfileHeader").then(module => ({ default: module.ProfileHeader })));
+const StatsDashboardLazy = lazy(() => import("../components/profile/StatsDashboard").then(module => ({ default: module.StatsDashboard })));
+const ActivityTimelineLazy = lazy(() => import("../components/profile/ActivityTimeline").then(module => ({ default: module.ActivityTimeline })));
+const OverviewDashboardLazy = lazy(() => import("../components/profile/OverviewDashboard").then(module => ({ default: module.OverviewDashboard })));
 
 export const ProfilePage = () => {
   const { profile, isLoading: isProfileLoading, updateProfile, isUpdating } = useProfile();
@@ -2272,46 +2277,20 @@ export const ProfilePage = () => {
             pageName="StatsTab"
             fallback={<div className="p-4 text-sm text-gray-300">Statistiken konnten nicht geladen werden.</div>}
           >
-            <div className={cn(
-              "grid gap-4",
-              "grid-cols-1",
-              "sm:grid-cols-2",
-              "md:grid-cols-2",
-              "lg:grid-cols-4"
-            )} role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
-          {stats.map((stat, index) => (
-            <div
-              key={index}
-                className={cn(
-                  "relative overflow-hidden rounded-2xl border backdrop-blur-xl",
-                  "bg-gradient-to-br from-slate-900/50 to-purple-900/30",
-                  "border-purple-500/20 hover:border-purple-500/40",
-                  "transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-purple-500/20",
-                  "p-4 sm:p-5 md:p-6",
-                  "touch-target"
-                )}
-            >
-              <div className="flex items-center justify-between mb-4">
-                  <div className={cn("p-3 bg-gradient-to-br rounded-xl", stat.color)}>
-                  <stat.icon className="w-6 h-6" />
+            <Suspense fallback={
+              <div className="space-y-6 animate-pulse">
+                <div className="h-64 bg-white/5 rounded-2xl" />
+                <div className="grid grid-cols-2 gap-4">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="h-32 bg-white/5 rounded-2xl" />
+                  ))}
                 </div>
-                  {stat.change && (
-                    <div className={cn(
-                      "flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium",
-                      stat.changeType === 'positive'
-                        ? "bg-emerald-500/20 text-emerald-400"
-                        : "bg-red-500/20 text-red-400"
-                    )}>
-                      <TrendingUp className="w-3 h-3" />
-                      {stat.change}
-                    </div>
-                  )}
               </div>
-              <p className="text-gray-400 text-sm mb-1">{stat.label}</p>
-              <p className="text-3xl font-bold text-white">{stat.value}</p>
-            </div>
-          ))}
-        </div>
+            }>
+              <div role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
+                <StatsDashboardLazy />
+              </div>
+            </Suspense>
           </PageErrorBoundary>
         );
 
@@ -2507,131 +2486,18 @@ export const ProfilePage = () => {
             pageName="ActivityTab"
             fallback={<div className="p-4 text-sm text-gray-300">Aktivität konnte nicht geladen werden.</div>}
           >
-            <div className="space-y-6" role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
-            {/* Activity Stats */}
-            <div className={cn(
-              "grid gap-4",
-              "grid-cols-2",
-              "sm:grid-cols-2",
-              "md:grid-cols-4",
-              "lg:grid-cols-4"
-            )}>
-              {[
-                { label: 'Heute aktiv', value: '4h 32m', icon: Clock, color: 'text-blue-400' },
-                { label: 'Diese Woche', value: '28h', icon: Calendar, color: 'text-purple-400' },
-                { label: 'Coins verdient', value: '+1,247', icon: Coins, color: 'text-yellow-400' },
-                { label: 'Aktivitäten', value: '47', icon: Activity, color: 'text-emerald-400' },
-              ].map((stat, index) => (
-                <div
-                  key={index}
-                  className="bg-gradient-to-br from-slate-900/50 to-purple-900/30 backdrop-blur-xl rounded-2xl p-4 border border-purple-500/20 text-center"
-                >
-                  <stat.icon className={cn("w-6 h-6 mx-auto mb-2", stat.color)} />
-                  <p className="text-xl font-bold text-white mb-1">{stat.value}</p>
-                  <p className="text-sm text-gray-400">{stat.label}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Activity Timeline */}
-            <div className={cn(
-              "bg-gradient-to-br from-slate-900/50 to-purple-900/30 backdrop-blur-xl rounded-2xl border border-purple-500/20",
-              "p-4 sm:p-5 md:p-6"
-            )}>
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-purple-400" />
-                  Aktivitätsverlauf
-                </h3>
-                <div className="flex gap-2">
-                  <button className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors touch-target">
-                    <Filter className="w-4 h-4" />
-                  </button>
-                  <button className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors touch-target">
-                    <Download className="w-4 h-4" />
-                  </button>
-          </div>
-        </div>
-
-              <div className="space-y-4">
-            {recentActivity.map((activity, index) => (
-              <div
-                key={index}
-                    className={cn(
-                      "relative flex items-start gap-4 rounded-xl transition-all duration-300",
-                      "bg-slate-800/50 hover:bg-slate-800/70",
-                      "hover:scale-[1.02] cursor-pointer touch-target",
-                      "p-3 sm:p-4"
-                    )}
-                  >
-                    {/* Timeline Line */}
-                    <div className="absolute left-6 top-12 bottom-0 w-px bg-gradient-to-b from-purple-500/50 to-transparent" />
-
-                    {/* Activity Icon */}
-                    <div className={cn(
-                      "relative z-10 p-3 rounded-xl border-2 transition-all duration-300",
-                      activity.type === 'success' && "bg-emerald-600/20 border-emerald-500/30 text-emerald-400",
-                      activity.type === 'coins' && "bg-yellow-600/20 border-yellow-500/30 text-yellow-400",
-                      activity.type === 'invite' && "bg-purple-600/20 border-purple-500/30 text-purple-400",
-                      activity.type === 'update' && "bg-blue-600/20 border-blue-500/30 text-blue-400"
-                    )}>
-                      <activity.icon className="w-5 h-5" />
-
-                      {/* Activity Badge */}
-                      {activity.points > 0 && (
-                        <div className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center">
-                          <span className="text-xs font-bold text-white">{activity.points > 99 ? '99+' : activity.points}</span>
-                        </div>
-                      )}
-                  </div>
-
-                    {/* Activity Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <p className="font-semibold text-white">{activity.action}</p>
-                    <p className="text-sm text-gray-400">{activity.item}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm text-gray-500">{activity.date}</p>
-                          {activity.points > 0 && (
-                            <p className="text-sm font-medium text-emerald-400">+{activity.points} Points</p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Activity Type Badge */}
-                      <div className="flex items-center gap-2">
-                        <span className={cn(
-                          "px-2 py-1 rounded-full text-xs font-medium",
-                          activity.type === 'success' && "bg-emerald-500/20 text-emerald-400",
-                          activity.type === 'coins' && "bg-yellow-500/20 text-yellow-400",
-                          activity.type === 'invite' && "bg-purple-500/20 text-purple-400",
-                          activity.type === 'update' && "bg-blue-500/20 text-blue-400"
-                        )}>
-                          {activity.type === 'success' && 'Erfolg'}
-                          {activity.type === 'coins' && 'Coins'}
-                          {activity.type === 'invite' && 'Einladung'}
-                          {activity.type === 'update' && 'Update'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+            <Suspense fallback={
+              <div className="space-y-6 animate-pulse">
+                <div className="h-12 bg-white/5 rounded-2xl" />
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-20 bg-white/5 rounded-2xl" />
                 ))}
               </div>
-
-              {/* Load More */}
-              <div className="text-center mt-6">
-                  <button className={cn(
-                    "bg-gradient-to-r from-purple-600/20 to-pink-600/20 hover:from-purple-600/30 hover:to-pink-600/30 border border-purple-500/30 rounded-xl text-purple-400 font-medium transition-all duration-300 hover:scale-105 touch-target",
-                    "px-4 sm:px-5 md:px-6",
-                    "py-2 sm:py-2.5 md:py-3"
-                  )}>
-                  Weitere Aktivitäten laden
-                </button>
+            }>
+              <div className="space-y-6" role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
+                <ActivityTimelineLazy />
               </div>
-            </div>
-          </div>
+            </Suspense>
           </PageErrorBoundary>
         );
 
@@ -3546,6 +3412,11 @@ export const ProfilePage = () => {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* Notification Settings */}
+              <div>
+                <NotificationSettings />
               </div>
 
               {/* Privacy Settings */}

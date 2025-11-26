@@ -52,6 +52,7 @@ import rankRoutes from './routes/rank';
 import cookieRoutes from './routes/cookie';
 import cookieAdminRoutes from './routes/cookieAdmin';
 import securityRoutes from './routes/security';
+import { userRoutes } from './routes/users';
 
 // Lade Environment Variables
 dotenv.config();
@@ -189,6 +190,7 @@ app.use('/api/admin/media', authMiddleware, adminMediaRoutes);
 app.use('/api/affiliate', affiliateRoutes);
 app.use('/api/status', statusRoutes);
 app.use('/api/security', authMiddleware, securityRoutes);
+app.use('/api/users', optionalAuth, userRoutes);
 
 // Error Handling (muss nach allen Routes kommen)
 app.use(errorHandler);
